@@ -63,6 +63,7 @@ export interface Producto {
   estado: EstadoProducto
   sabor: string | null
   tamano: string | null
+  imagen_base64: string | null
   creado_en: string
 }
 
@@ -73,6 +74,7 @@ export interface ProductoCreate {
   estado?: EstadoProducto
   sabor?: string | null
   tamano?: string | null
+  imagen_base64?: string | null
 }
 
 export interface ProductoUpdate {
@@ -82,6 +84,7 @@ export interface ProductoUpdate {
   estado?: EstadoProducto
   sabor?: string | null
   tamano?: string | null
+  imagen_base64?: string | null
 }
 
 /**
@@ -123,7 +126,7 @@ export interface AjusteStock {
  * siempre se calculan en el servidor a partir del precio actual del
  * producto — el cliente nunca envía totales.
  */
-export type MetodoPago = 'efectivo' | 'tarjeta'
+export type MetodoPago = 'efectivo' | 'transferencia'
 
 export interface VentaItemCreate {
   producto_id: number

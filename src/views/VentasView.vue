@@ -6,6 +6,9 @@ import { useCategorias } from '../composables/useCategorias'
 import { useMesas } from '../composables/useMesas'
 import { useCarrito } from '../composables/useCarrito'
 import { useVentas } from '../composables/useVentas'
+import ProductoThumbnail from '../components/common/ProductoThumbnail.vue'
+import IconBanknote from '../components/icons/IconBanknote.vue'
+import IconTransfer from '../components/icons/IconTransfer.vue'
 import { formatCOP } from '../utils/currency'
 import type { MetodoPago, Producto, Venta } from '../api/types'
 
@@ -139,7 +142,7 @@ async function onConfirmarVenta() {
     <div v-if="ticket" class="ticket">
       <h2>Venta #{{ ticket.ventaId }} registrada</h2>
       <p class="ticket-meta">
-        Método de pago: <strong>{{ ticket.metodoPago === 'efectivo' ? 'Efectivo' : 'Tarjeta' }}</strong>
+        Método de pago: <strong>{{ ticket.metodoPago === 'efectivo' ? 'Efectivo' : 'Transferencia' }}</strong>
         <span v-if="ticket.mesaNombre"> · Mesa: <strong>{{ ticket.mesaNombre }}</strong></span>
         <span v-else> · Venta libre</span>
       </p>
@@ -187,6 +190,7 @@ async function onConfirmarVenta() {
 
         <ul v-else class="producto-grid">
           <li v-for="producto in productosFiltrados" :key="producto.id" class="producto-card">
+            <ProductoThumbnail :src="producto.imagen_base64" :alt="producto.nombre" variant="card" />
             <div class="producto-info">
               <span class="producto-nombre">{{ producto.nombre }}</span>
               <span class="producto-categoria">{{ categoriaNombre(producto.categoria_id) }}</span>
@@ -220,15 +224,29 @@ async function onConfirmarVenta() {
 
         <div class="form-row">
           <label>Método de pago</label>
-          <div class="metodo-pago">
-            <label class="metodo-option">
-              <input v-model="metodoPago" type="radio" name="metodo-pago" value="efectivo" />
+          <div class="metodo-pago" role="radiogroup" aria-label="Método de pago">
+            <button
+              type="button"
+              class="metodo-option metodo-option--efectivo"
+              role="radio"
+              :aria-checked="metodoPago === 'efectivo'"
+              :class="{ 'metodo-option--active': metodoPago === 'efectivo' }"
+              @click="metodoPago = 'efectivo'"
+            >
+              <IconBanknote />
               Efectivo
-            </label>
-            <label class="metodo-option">
-              <input v-model="metodoPago" type="radio" name="metodo-pago" value="tarjeta" />
-              Tarjeta
-            </label>
+            </button>
+            <button
+              type="button"
+              class="metodo-option metodo-option--transferencia"
+              role="radio"
+              :aria-checked="metodoPago === 'transferencia'"
+              :class="{ 'metodo-option--active': metodoPago === 'transferencia' }"
+              @click="metodoPago = 'transferencia'"
+            >
+              <IconTransfer />
+              Transferencia
+            </button>
           </div>
         </div>
 
@@ -449,16 +467,47 @@ async function onConfirmarVenta() {
 
 .metodo-pago {
   display: flex;
-  gap: 16px;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
 }
 
 .metodo-option {
+  flex: 1;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   font-size: 13.5px;
-  color: var(--color-text);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.metodo-option:hover:not(.metodo-option--active) {
+  color: var(--color-text);
+}
+
+.metodo-option--active.metodo-option--efectivo {
+  color: var(--color-bg);
+  background: var(--color-lime);
+}
+
+.metodo-option--active.metodo-option--transferencia {
+  color: var(--color-bg);
+  background: var(--color-orange);
+}
+
+.metodo-option:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
 }
 
 .carrito-lineas {

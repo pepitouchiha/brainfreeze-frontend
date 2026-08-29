@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useReportes } from '../composables/useReportes'
+import { useVentas } from '../composables/useVentas'
+import { useMesas } from '../composables/useMesas'
 import { formatCOP } from '../utils/currency'
 
 const {
@@ -14,15 +16,26 @@ const {
   loadAlertasStock,
 } = useReportes()
 
+const { ventas, isLoading: isLoadingVentas, loadError: errorVentas, load: loadVentas } = useVentas()
+const { mesas, load: loadMesas } = useMesas()
+
 onMounted(() => {
   loadHoy()
   loadAlertasStock()
+  loadVentas()
+  loadMesas()
 })
 
 const totalHoy = computed(() => reporteHoy.value?.total ?? 0)
 const numVentasHoy = computed(() => reporteHoy.value?.num_ventas ?? 0)
 const alertasCount = computed(() => alertasStock.value.length)
 const alertasPreview = computed(() => alertasStock.value.slice(0, 5))
+const ultimasVentas = computed(() => ventas.value.slice(0, 5))
+
+function mesaNombre(mesaId: number | null): string {
+  if (mesaId === null) return 'Venta libre'
+  return mesas.value.find((m) => m.id === mesaId)?.nombre_o_numero ?? 'Venta libre'
+}
 </script>
 
 <template>
@@ -32,26 +45,58 @@ const alertasPreview = computed(() => alertasStock.value.slice(0, 5))
     </header>
 
     <div class="kpi-grid">
-      <div class="kpi-card">
+      <div class="kpi-card kpi-card--lime">
         <span class="kpi-label">Total vendido hoy</span>
         <p v-if="isLoadingHoy" class="status">Cargando…</p>
         <p v-else-if="errorHoy" class="error" role="alert">{{ errorHoy }}</p>
         <span v-else class="kpi-value kpi-value--lime">{{ formatCOP(totalHoy) }}</span>
       </div>
 
-      <div class="kpi-card">
+      <div class="kpi-card kpi-card--cyan">
         <span class="kpi-label">Ventas de hoy</span>
         <p v-if="isLoadingHoy" class="status">Cargando…</p>
         <p v-else-if="errorHoy" class="error" role="alert">{{ errorHoy }}</p>
         <span v-else class="kpi-value kpi-value--cyan">{{ numVentasHoy }}</span>
       </div>
 
-      <div class="kpi-card">
+      <div class="kpi-card kpi-card--magenta">
         <span class="kpi-label">Insumos en alerta</span>
         <p v-if="isLoadingAlertas" class="status">Cargando…</p>
         <p v-else-if="errorAlertas" class="error" role="alert">{{ errorAlertas }}</p>
         <span v-else class="kpi-value kpi-value--magenta">{{ alertasCount }}</span>
       </div>
+    </div>
+
+    <div class="ventas-panel">
+      <header class="ventas-header">
+        <h2>Últimas ventas</h2>
+        <router-link class="btn-link" :to="{ name: 'ventas' }">Ir a ventas</router-link>
+      </header>
+
+      <p v-if="isLoadingVentas" class="status">Cargando ventas…</p>
+      <p v-else-if="errorVentas" class="error" role="alert">{{ errorVentas }}</p>
+      <p v-else-if="ultimasVentas.length === 0" class="status">Todavía no hay ventas registradas.</p>
+
+      <table v-else class="ventas-table">
+        <thead>
+          <tr>
+            <th>Mesa</th>
+            <th>Total</th>
+            <th>Método de pago</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="venta in ultimasVentas" :key="venta.id">
+            <td>{{ mesaNombre(venta.mesa_id) }}</td>
+            <td>{{ formatCOP(venta.total) }}</td>
+            <td>
+              <span class="tag" :class="`tag--${venta.metodo_pago}`">
+                {{ venta.metodo_pago === 'efectivo' ? 'Efectivo' : 'Transferencia' }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <div class="alertas-panel">
@@ -108,6 +153,19 @@ const alertasPreview = computed(() => alertasStock.value.slice(0, 5))
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   border: 1px solid var(--color-border-soft);
+  border-top: 3px solid var(--color-border-soft);
+}
+
+.kpi-card--lime {
+  border-top-color: var(--color-lime);
+}
+
+.kpi-card--cyan {
+  border-top-color: var(--color-cyan);
+}
+
+.kpi-card--magenta {
+  border-top-color: var(--color-magenta);
 }
 
 .kpi-label {
@@ -233,5 +291,65 @@ const alertasPreview = computed(() => alertasStock.value.slice(0, 5))
   color: var(--color-danger);
   background: rgba(255, 77, 109, 0.14);
   border: 1px solid rgba(255, 77, 109, 0.4);
+}
+
+.tag--efectivo {
+  color: var(--color-cyan);
+  background: rgba(0, 229, 255, 0.14);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+}
+
+.tag--transferencia {
+  color: var(--color-magenta);
+  background: rgba(255, 0, 127, 0.14);
+  border: 1px solid rgba(255, 0, 127, 0.4);
+}
+
+.ventas-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+}
+
+.ventas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ventas-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--color-text);
+}
+
+.ventas-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ventas-table th,
+.ventas-table td {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.ventas-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.ventas-table tbody tr:last-child td {
+  border-bottom: none;
 }
 </style>

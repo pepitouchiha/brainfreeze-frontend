@@ -3,7 +3,8 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login } from '../api/auth'
 import { ApiError } from '../api/client'
-import { setToken } from '../composables/useAuth'
+import { setToken, setUserEmail } from '../composables/useAuth'
+import logoBrainFreeze from '../assets/brand/logo-brainfreeze.jpeg'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +26,7 @@ async function onSubmit() {
   try {
     const response = await login({ email: email.value.trim(), password: password.value })
     setToken(response.access_token)
+    setUserEmail(email.value.trim())
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
     router.push(redirect)
   } catch (err) {
@@ -41,7 +43,8 @@ async function onSubmit() {
 
 <template>
   <section class="login-card">
-    <div class="brand">BRAINFREEZEE</div>
+    <img class="brand-logo" :src="logoBrainFreeze" alt="Logo BrainFreeze" width="72" height="72" />
+    <div class="brand brand-gradient-text">BRAINFREEZEE</div>
     <p class="subtitle">Panel de gestión — acceso administrador</p>
 
     <form @submit.prevent="onSubmit">
@@ -90,15 +93,21 @@ async function onSubmit() {
   box-shadow: 0 0 50px rgba(123, 44, 191, 0.35), 0 20px 50px rgba(0, 0, 0, 0.5);
 }
 
+.brand-logo {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 30px rgba(123, 44, 191, 0.5);
+}
+
 .brand {
   font-weight: 700;
   font-size: 24px;
   letter-spacing: 0.01em;
   text-align: center;
-  background: linear-gradient(90deg, var(--color-magenta), var(--color-purple) 55%, var(--color-cyan));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
   margin-bottom: 6px;
 }
 

@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useCategorias } from '../composables/useCategorias'
+import { useToast } from '../composables/useToast'
+import BaseModal from '../components/common/BaseModal.vue'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
+import IconPencil from '../components/icons/IconPencil.vue'
+import IconTrash from '../components/icons/IconTrash.vue'
 import type { Categoria } from '../api/types'
 
 const { categorias, isLoading, loadError, load, create, update, remove, messageFor } = useCategorias()
+const { push: pushToast } = useToast()
 
 const isFormOpen = ref(false)
 const editingId = ref<number | null>(null)
@@ -13,6 +19,7 @@ const isSaving = ref(false)
 
 const deletingId = ref<number | null>(null)
 const deleteErrorFor = reactive<Record<number, string>>({})
+const pendingDelete = ref<Categoria | null>(null)
 
 onMounted(load)
 
@@ -49,8 +56,10 @@ async function onSubmit() {
   try {
     if (editingId.value === null) {
       await create({ nombre: form.nombre.trim(), color: form.color })
+      pushToast('Categoría creada')
     } else {
       await update(editingId.value, { nombre: form.nombre.trim(), color: form.color })
+      pushToast('Categoría actualizada')
     }
     closeForm()
   } catch (err) {
@@ -60,16 +69,30 @@ async function onSubmit() {
   }
 }
 
-async function onDelete(categoria: Categoria) {
+function requestDelete(categoria: Categoria) {
+  pendingDelete.value = categoria
+}
+
+function cancelDelete() {
+  pendingDelete.value = null
+}
+
+async function confirmDelete() {
+  const categoria = pendingDelete.value
+  if (!categoria) return
+
   delete deleteErrorFor[categoria.id]
   deletingId.value = categoria.id
   try {
     await remove(categoria.id)
+    pendingDelete.value = null
+    pushToast('Categoría eliminada')
   } catch (err) {
     deleteErrorFor[categoria.id] = messageFor(
       err,
       'No fue posible eliminar la categoría.',
     )
+    pendingDelete.value = null
   } finally {
     deletingId.value = null
   }
@@ -83,52 +106,70 @@ async function onDelete(categoria: Categoria) {
       <button type="button" class="btn-primary" @click="openCreateForm">+ Nueva categoría</button>
     </header>
 
-    <form v-if="isFormOpen" class="category-form" @submit.prevent="onSubmit">
-      <h2>{{ editingId === null ? 'Nueva categoría' : 'Editar categoría' }}</h2>
+    <BaseModal v-if="isFormOpen" @close="closeForm">
+      <form class="category-form" @submit.prevent="onSubmit">
+        <h2>{{ editingId === null ? 'Nueva categoría' : 'Editar categoría' }}</h2>
 
-      <div class="form-row">
-        <label for="cat-nombre">Nombre</label>
-        <input id="cat-nombre" v-model="form.nombre" type="text" placeholder="Ej. Granizados" :disabled="isSaving" />
-      </div>
-
-      <div class="form-row">
-        <label for="cat-color">Color</label>
-        <div class="color-row">
-          <input id="cat-color" v-model="form.color" type="color" :disabled="isSaving" />
-          <span class="color-value">{{ form.color }}</span>
+        <div class="form-row">
+          <label for="cat-nombre">Nombre</label>
+          <input id="cat-nombre" v-model="form.nombre" type="text" placeholder="Ej. Granizados" :disabled="isSaving" />
         </div>
-      </div>
 
-      <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+        <div class="form-row">
+          <label for="cat-color">Color</label>
+          <div class="color-row">
+            <input id="cat-color" v-model="form.color" type="color" :disabled="isSaving" />
+            <span class="color-value">{{ form.color }}</span>
+          </div>
+        </div>
 
-      <div class="form-actions">
-        <button type="button" class="btn-secondary" :disabled="isSaving" @click="closeForm">Cancelar</button>
-        <button type="submit" class="btn-primary" :disabled="isSaving">
-          {{ isSaving ? 'Guardando…' : 'Guardar' }}
-        </button>
-      </div>
-    </form>
+        <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" :disabled="isSaving" @click="closeForm">Cancelar</button>
+          <button type="submit" class="btn-primary" :disabled="isSaving">
+            {{ isSaving ? 'Guardando…' : 'Guardar' }}
+          </button>
+        </div>
+      </form>
+    </BaseModal>
 
     <p v-if="isLoading" class="status">Cargando categorías…</p>
     <p v-else-if="loadError" class="error" role="alert">{{ loadError }}</p>
     <p v-else-if="categorias.length === 0" class="status">Todavía no hay categorías creadas.</p>
 
     <ul v-else class="category-list">
-      <li v-for="categoria in categorias" :key="categoria.id" class="category-card">
+      <li
+        v-for="categoria in categorias"
+        :key="categoria.id"
+        class="category-card"
+        :style="{ borderTopColor: categoria.color }"
+      >
         <span class="swatch" :style="{ backgroundColor: categoria.color }"></span>
         <div class="category-info">
           <span class="category-name">{{ categoria.nombre }}</span>
           <span class="category-count">{{ categoria.productos_count }} producto(s)</span>
         </div>
         <div class="category-actions">
-          <button type="button" class="btn-link" @click="openEditForm(categoria)">Editar</button>
+          <button
+            type="button"
+            class="btn-link"
+            aria-label="Editar categoría"
+            title="Editar categoría"
+            @click="openEditForm(categoria)"
+          >
+            <IconPencil />
+          </button>
           <button
             type="button"
             class="btn-link btn-link--danger"
             :disabled="deletingId === categoria.id"
-            @click="onDelete(categoria)"
+            :aria-label="deletingId === categoria.id ? 'Eliminando categoría…' : 'Eliminar categoría'"
+            :title="deletingId === categoria.id ? 'Eliminando categoría…' : 'Eliminar categoría'"
+            :aria-busy="deletingId === categoria.id"
+            @click="requestDelete(categoria)"
           >
-            {{ deletingId === categoria.id ? 'Eliminando…' : 'Eliminar' }}
+            <IconTrash />
           </button>
         </div>
         <p v-if="deleteErrorFor[categoria.id]" class="error error--inline" role="alert">
@@ -136,6 +177,15 @@ async function onDelete(categoria: Categoria) {
         </p>
       </li>
     </ul>
+
+    <ConfirmModal
+      v-if="pendingDelete"
+      title="Eliminar categoría"
+      :message="`¿Eliminar la categoría «${pendingDelete.nombre}»? Esta acción no se puede deshacer.`"
+      :is-confirming="deletingId === pendingDelete.id"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </section>
 </template>
 
@@ -185,16 +235,40 @@ async function onDelete(categoria: Categoria) {
 }
 
 .btn-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--color-cyan);
   cursor: pointer;
   font-size: 13px;
-  padding: 4px 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-link:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.12);
+  color: #5df2ff;
+}
+
+.btn-link:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
 }
 
 .btn-link--danger {
   color: var(--color-danger);
+}
+
+.btn-link--danger:hover:not(:disabled) {
+  background: rgba(255, 77, 109, 0.14);
+  color: #ff7d91;
+}
+
+.btn-link--danger:focus-visible {
+  outline-color: var(--color-danger);
 }
 
 .btn-link:disabled {
@@ -206,11 +280,6 @@ async function onDelete(categoria: Categoria) {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-soft);
-  max-width: 420px;
 }
 
 .category-form h2 {
@@ -299,6 +368,7 @@ async function onDelete(categoria: Categoria) {
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   border: 1px solid var(--color-border-soft);
+  border-top: 3px solid var(--color-border-soft);
 }
 
 .swatch {
@@ -327,6 +397,6 @@ async function onDelete(categoria: Categoria) {
 
 .category-actions {
   display: flex;
-  gap: 4px;
+  gap: 8px;
 }
 </style>

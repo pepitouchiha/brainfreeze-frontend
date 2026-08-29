@@ -1,14 +1,25 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useProductos } from '../composables/useProductos'
 import { useCategorias } from '../composables/useCategorias'
+import { useToast } from '../composables/useToast'
+import BaseModal from '../components/common/BaseModal.vue'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
+import ProductoThumbnail from '../components/common/ProductoThumbnail.vue'
+import ToggleSwitch from '../components/common/ToggleSwitch.vue'
+import NumberInput from '../components/common/NumberInput.vue'
+import IconPencil from '../components/icons/IconPencil.vue'
+import IconTrash from '../components/icons/IconTrash.vue'
 import { formatCOP } from '../utils/currency'
 import type { EstadoProducto, Producto } from '../api/types'
 import type { ListProductosParams } from '../api/productos'
 
+const MAX_IMAGEN_BYTES = 500 * 1024
+
 const { productos, total, isLoading, loadError, loadTotal, load, create, update, remove, messageFor } =
   useProductos()
 const { categorias, load: loadCategorias } = useCategorias()
+const { push: pushToast } = useToast()
 
 const search = ref('')
 const categoriaFiltro = ref<number | ''>('')
@@ -41,12 +52,25 @@ const form = reactive({
   categoria_id: '' as number | '',
   precio: '' as number | '',
   estado: 'disponible' as EstadoProducto,
+  imagenBase64: null as string | null,
 })
+const imagenTouched = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 const formError = ref('')
 const isSaving = ref(false)
 
+const formEstadoDisponible = computed<boolean>({
+  get: () => form.estado === 'disponible',
+  set: (value) => {
+    form.estado = value ? 'disponible' : 'agotado'
+  },
+})
+
+const estadoUpdating = reactive<Record<number, boolean>>({})
+
 const deletingId = ref<number | null>(null)
 const deleteErrorFor = reactive<Record<number, string>>({})
+const pendingDelete = ref<Producto | null>(null)
 
 onMounted(() => {
   loadCategorias()
@@ -64,6 +88,9 @@ function openCreateForm() {
   form.categoria_id = categoriaFiltro.value !== '' ? categoriaFiltro.value : ''
   form.precio = ''
   form.estado = 'disponible'
+  form.imagenBase64 = null
+  imagenTouched.value = false
+  if (fileInputRef.value) fileInputRef.value.value = ''
   formError.value = ''
   isFormOpen.value = true
 }
@@ -74,6 +101,9 @@ function openEditForm(producto: Producto) {
   form.categoria_id = producto.categoria_id
   form.precio = producto.precio
   form.estado = producto.estado
+  form.imagenBase64 = producto.imagen_base64
+  imagenTouched.value = false
+  if (fileInputRef.value) fileInputRef.value.value = ''
   formError.value = ''
   isFormOpen.value = true
 }
@@ -82,6 +112,32 @@ function closeForm() {
   isFormOpen.value = false
   editingId.value = null
   formError.value = ''
+}
+
+function onImageSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  if (file.size > MAX_IMAGEN_BYTES) {
+    formError.value = 'La imagen supera el tamaño máximo permitido (500KB).'
+    input.value = ''
+    return
+  }
+
+  formError.value = ''
+  const reader = new FileReader()
+  reader.onload = () => {
+    form.imagenBase64 = reader.result as string
+    imagenTouched.value = true
+  }
+  reader.readAsDataURL(file)
+}
+
+function onRemoveImage() {
+  form.imagenBase64 = null
+  imagenTouched.value = true
+  if (fileInputRef.value) fileInputRef.value.value = ''
 }
 
 async function onSubmit() {
@@ -106,11 +162,14 @@ async function onSubmit() {
       categoria_id: Number(form.categoria_id),
       precio: Number(form.precio),
       estado: form.estado,
+      imagen_base64: imagenTouched.value ? form.imagenBase64 : undefined,
     }
     if (editingId.value === null) {
       await create(payload)
+      pushToast('Producto creado')
     } else {
       await update(editingId.value, payload)
+      pushToast('Producto actualizado')
     }
     closeForm()
     await Promise.all([refresh(), loadTotal()])
@@ -121,16 +180,47 @@ async function onSubmit() {
   }
 }
 
-async function onDelete(producto: Producto) {
+function requestDelete(producto: Producto) {
+  pendingDelete.value = producto
+}
+
+function cancelDelete() {
+  pendingDelete.value = null
+}
+
+async function confirmDelete() {
+  const producto = pendingDelete.value
+  if (!producto) return
+
   delete deleteErrorFor[producto.id]
   deletingId.value = producto.id
   try {
     await remove(producto.id)
+    pendingDelete.value = null
+    pushToast('Producto eliminado')
     await Promise.all([refresh(), loadTotal()])
   } catch (err) {
     deleteErrorFor[producto.id] = messageFor(err, 'No fue posible eliminar el producto.')
+    pendingDelete.value = null
   } finally {
     deletingId.value = null
+  }
+}
+
+async function onToggleEstado(producto: Producto, disponible: boolean) {
+  const nuevoEstado: EstadoProducto = disponible ? 'disponible' : 'agotado'
+  const anterior = producto.estado
+  producto.estado = nuevoEstado
+  estadoUpdating[producto.id] = true
+  try {
+    const actualizado = await update(producto.id, { estado: nuevoEstado })
+    producto.estado = actualizado.estado
+    pushToast('Estado actualizado')
+  } catch (err) {
+    producto.estado = anterior
+    pushToast(messageFor(err, 'No fue posible actualizar el estado.'), 'error')
+  } finally {
+    delete estadoUpdating[producto.id]
   }
 }
 </script>
@@ -160,60 +250,79 @@ async function onDelete(producto: Producto) {
 
     <p class="counter">{{ productos.length }} de {{ total }} productos</p>
 
-    <form v-if="isFormOpen" class="producto-form" @submit.prevent="onSubmit">
-      <h2>{{ editingId === null ? 'Nuevo producto' : 'Editar producto' }}</h2>
+    <BaseModal v-if="isFormOpen" @close="closeForm">
+      <form class="producto-form" @submit.prevent="onSubmit">
+        <h2>{{ editingId === null ? 'Nuevo producto' : 'Editar producto' }}</h2>
 
-      <div class="form-row">
-        <label for="prod-nombre">Nombre</label>
-        <input
-          id="prod-nombre"
-          v-model="form.nombre"
-          type="text"
-          placeholder="Ej. Granizado Fresa Chico"
-          :disabled="isSaving"
-        />
-      </div>
+        <div class="form-row">
+          <label for="prod-nombre">Nombre</label>
+          <input
+            id="prod-nombre"
+            v-model="form.nombre"
+            type="text"
+            placeholder="Ej. Granizado Fresa Chico"
+            :disabled="isSaving"
+          />
+        </div>
 
-      <div class="form-row">
-        <label for="prod-categoria">Categoría</label>
-        <select id="prod-categoria" v-model="form.categoria_id" :disabled="isSaving">
-          <option value="" disabled>Selecciona una categoría</option>
-          <option v-for="categoria in categorias" :key="categoria.id" :value="categoria.id">
-            {{ categoria.nombre }}
-          </option>
-        </select>
-      </div>
+        <div class="form-row">
+          <label for="prod-categoria">Categoría</label>
+          <select id="prod-categoria" v-model="form.categoria_id" :disabled="isSaving">
+            <option value="" disabled>Selecciona una categoría</option>
+            <option v-for="categoria in categorias" :key="categoria.id" :value="categoria.id">
+              {{ categoria.nombre }}
+            </option>
+          </select>
+        </div>
 
-      <div class="form-row">
-        <label for="prod-precio">Precio (COP)</label>
-        <input
-          id="prod-precio"
-          v-model.number="form.precio"
-          type="number"
-          min="1"
-          step="1"
-          placeholder="Ej. 5000"
-          :disabled="isSaving"
-        />
-      </div>
+        <div class="form-row">
+          <label for="prod-precio">Precio (COP)</label>
+          <NumberInput
+            id="prod-precio"
+            v-model="form.precio"
+            :min="1"
+            :step="1"
+            placeholder="Ej. 5000"
+            :disabled="isSaving"
+          />
+        </div>
 
-      <div class="form-row">
-        <label for="prod-estado">Estado</label>
-        <select id="prod-estado" v-model="form.estado" :disabled="isSaving">
-          <option value="disponible">Disponible</option>
-          <option value="agotado">Agotado</option>
-        </select>
-      </div>
+        <div class="form-row">
+          <label for="prod-estado">Estado</label>
+          <div class="estado-toggle">
+            <ToggleSwitch id="prod-estado" v-model="formEstadoDisponible" :disabled="isSaving" aria-label="Estado del producto" />
+            <span class="estado-toggle__label">{{ formEstadoDisponible ? 'Disponible' : 'Agotado' }}</span>
+          </div>
+        </div>
 
-      <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+        <div class="form-row">
+          <label for="prod-imagen">Imagen (opcional)</label>
+          <input
+            id="prod-imagen"
+            ref="fileInputRef"
+            type="file"
+            accept="image/*"
+            :disabled="isSaving"
+            @change="onImageSelected"
+          />
+          <div v-if="form.imagenBase64" class="imagen-preview">
+            <ProductoThumbnail :src="form.imagenBase64" alt="Vista previa de la imagen" variant="card" />
+            <button type="button" class="btn-link btn-link--danger" :disabled="isSaving" @click="onRemoveImage">
+              Quitar imagen
+            </button>
+          </div>
+        </div>
 
-      <div class="form-actions">
-        <button type="button" class="btn-secondary" :disabled="isSaving" @click="closeForm">Cancelar</button>
-        <button type="submit" class="btn-primary" :disabled="isSaving">
-          {{ isSaving ? 'Guardando…' : 'Guardar' }}
-        </button>
-      </div>
-    </form>
+        <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" :disabled="isSaving" @click="closeForm">Cancelar</button>
+          <button type="submit" class="btn-primary" :disabled="isSaving">
+            {{ isSaving ? 'Guardando…' : 'Guardar' }}
+          </button>
+        </div>
+      </form>
+    </BaseModal>
 
     <p v-if="isLoading" class="status">Cargando productos…</p>
     <p v-else-if="loadError" class="error" role="alert">{{ loadError }}</p>
@@ -222,6 +331,7 @@ async function onDelete(producto: Producto) {
     <table v-else class="producto-table">
       <thead>
         <tr>
+          <th></th>
           <th>Nombre</th>
           <th>Categoría</th>
           <th>Precio</th>
@@ -231,31 +341,64 @@ async function onDelete(producto: Producto) {
       </thead>
       <tbody>
         <tr v-for="producto in productos" :key="producto.id">
+          <td class="thumb-cell">
+            <ProductoThumbnail :src="producto.imagen_base64" :alt="producto.nombre" variant="thumb" />
+          </td>
           <td>{{ producto.nombre }}</td>
           <td>{{ categoriaNombre(producto.categoria_id) }}</td>
           <td>{{ formatCOP(producto.precio) }}</td>
           <td>
-            <span class="tag" :class="`tag--${producto.estado}`">
-              {{ producto.estado === 'disponible' ? 'Disponible' : 'Agotado' }}
-            </span>
+            <div class="estado-toggle">
+              <ToggleSwitch
+                :model-value="producto.estado === 'disponible'"
+                :disabled="!!estadoUpdating[producto.id]"
+                :aria-label="`Cambiar estado de ${producto.nombre}`"
+                @update:model-value="(value) => onToggleEstado(producto, value)"
+              />
+              <span class="estado-toggle__label">
+                {{ producto.estado === 'disponible' ? 'Disponible' : 'Agotado' }}
+              </span>
+            </div>
           </td>
           <td class="actions-cell">
-            <button type="button" class="btn-link" @click="openEditForm(producto)">Editar</button>
-            <button
-              type="button"
-              class="btn-link btn-link--danger"
-              :disabled="deletingId === producto.id"
-              @click="onDelete(producto)"
-            >
-              {{ deletingId === producto.id ? 'Eliminando…' : 'Eliminar' }}
-            </button>
-            <p v-if="deleteErrorFor[producto.id]" class="error error--inline" role="alert">
-              {{ deleteErrorFor[producto.id] }}
-            </p>
+            <div class="actions-inner">
+              <button
+                type="button"
+                class="btn-link"
+                aria-label="Editar producto"
+                title="Editar producto"
+                @click="openEditForm(producto)"
+              >
+                <IconPencil />
+              </button>
+              <button
+                type="button"
+                class="btn-link btn-link--danger"
+                :disabled="deletingId === producto.id"
+                :aria-label="deletingId === producto.id ? 'Eliminando producto…' : 'Eliminar producto'"
+                :title="deletingId === producto.id ? 'Eliminando producto…' : 'Eliminar producto'"
+                :aria-busy="deletingId === producto.id"
+                @click="requestDelete(producto)"
+              >
+                <IconTrash />
+              </button>
+              <p v-if="deleteErrorFor[producto.id]" class="error error--inline" role="alert">
+                {{ deleteErrorFor[producto.id] }}
+              </p>
+            </div>
           </td>
         </tr>
       </tbody>
     </table>
+
+    <ConfirmModal
+      v-if="pendingDelete"
+      title="Eliminar producto"
+      :message="`¿Eliminar el producto «${pendingDelete.nombre}»? Esta acción no se puede deshacer.`"
+      :is-confirming="deletingId === pendingDelete.id"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </section>
 </template>
 
@@ -305,16 +448,40 @@ async function onDelete(producto: Producto) {
 }
 
 .btn-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--color-cyan);
   cursor: pointer;
   font-size: 13px;
-  padding: 4px 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-link:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.12);
+  color: #5df2ff;
+}
+
+.btn-link:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
 }
 
 .btn-link--danger {
   color: var(--color-danger);
+}
+
+.btn-link--danger:hover:not(:disabled) {
+  background: rgba(255, 77, 109, 0.14);
+  color: #ff7d91;
+}
+
+.btn-link--danger:focus-visible {
+  outline-color: var(--color-danger);
 }
 
 .btn-link:disabled {
@@ -359,11 +526,6 @@ async function onDelete(producto: Producto) {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-soft);
-  max-width: 420px;
 }
 
 .producto-form h2 {
@@ -391,6 +553,24 @@ async function onDelete(producto: Producto) {
   padding: 10px 12px;
   font-size: 14px;
   color: var(--color-text);
+}
+
+.form-row input[type='file'] {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.imagen-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 220px;
+}
+
+.thumb-cell {
+  width: 52px;
 }
 
 .form-actions {
@@ -444,30 +624,23 @@ async function onDelete(producto: Producto) {
   border-bottom: none;
 }
 
-.actions-cell {
+.actions-inner {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
-.tag {
-  font-size: 12px;
+.estado-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.estado-toggle__label {
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 999px;
+  color: var(--color-text-muted);
   white-space: nowrap;
-}
-
-.tag--disponible {
-  color: var(--color-lime);
-  background: rgba(178, 255, 5, 0.14);
-  border: 1px solid rgba(178, 255, 5, 0.4);
-}
-
-.tag--agotado {
-  color: var(--color-danger);
-  background: rgba(255, 77, 109, 0.14);
-  border: 1px solid rgba(255, 77, 109, 0.4);
 }
 </style>

@@ -2,10 +2,13 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMesas } from '../composables/useMesas'
+import { useToast } from '../composables/useToast'
+import BaseModal from '../components/common/BaseModal.vue'
 import type { Mesa } from '../api/types'
 
 const router = useRouter()
 const { mesas, isLoading, loadError, load, create, liberar, messageFor } = useMesas()
+const { push: pushToast } = useToast()
 
 const isFormOpen = ref(false)
 const nombre = ref('')
@@ -38,6 +41,7 @@ async function onSubmit() {
   formError.value = ''
   try {
     await create({ nombre_o_numero: nombre.value.trim() })
+    pushToast('Mesa creada')
     closeForm()
   } catch (err) {
     formError.value = messageFor(err, 'No fue posible crear la mesa.')
@@ -51,6 +55,7 @@ async function onLiberar(mesa: Mesa) {
   liberandoId.value = mesa.id
   try {
     await liberar(mesa.id)
+    pushToast('Mesa liberada')
   } catch (err) {
     liberarErrorFor.value[mesa.id] = messageFor(err, 'No fue posible liberar la mesa.')
   } finally {
@@ -70,29 +75,31 @@ function onIniciarVenta(mesa: Mesa) {
       <button type="button" class="btn-primary" @click="openCreateForm">+ Nueva mesa</button>
     </header>
 
-    <form v-if="isFormOpen" class="mesa-form" @submit.prevent="onSubmit">
-      <h2>Nueva mesa</h2>
+    <BaseModal v-if="isFormOpen" @close="closeForm">
+      <form class="mesa-form" @submit.prevent="onSubmit">
+        <h2>Nueva mesa</h2>
 
-      <div class="form-row">
-        <label for="mesa-nombre">Nombre o número</label>
-        <input
-          id="mesa-nombre"
-          v-model="nombre"
-          type="text"
-          placeholder="Ej. Mesa 4"
-          :disabled="isSaving"
-        />
-      </div>
+        <div class="form-row">
+          <label for="mesa-nombre">Nombre o número</label>
+          <input
+            id="mesa-nombre"
+            v-model="nombre"
+            type="text"
+            placeholder="Ej. Mesa 4"
+            :disabled="isSaving"
+          />
+        </div>
 
-      <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+        <p v-if="formError" class="error" role="alert">{{ formError }}</p>
 
-      <div class="form-actions">
-        <button type="button" class="btn-secondary" :disabled="isSaving" @click="closeForm">Cancelar</button>
-        <button type="submit" class="btn-primary" :disabled="isSaving">
-          {{ isSaving ? 'Creando…' : 'Crear' }}
-        </button>
-      </div>
-    </form>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" :disabled="isSaving" @click="closeForm">Cancelar</button>
+          <button type="submit" class="btn-primary" :disabled="isSaving">
+            {{ isSaving ? 'Creando…' : 'Crear' }}
+          </button>
+        </div>
+      </form>
+    </BaseModal>
 
     <p v-if="isLoading" class="status">Cargando mesas…</p>
     <p v-else-if="loadError" class="error" role="alert">{{ loadError }}</p>
@@ -172,6 +179,17 @@ function onIniciarVenta(mesa: Mesa) {
   color: var(--color-text);
   background: transparent;
   border: 1px solid var(--color-border);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(123, 44, 191, 0.18);
+  border-color: var(--color-purple);
+}
+
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--color-purple);
+  outline-offset: 2px;
 }
 
 .btn-link {
@@ -180,7 +198,19 @@ function onIniciarVenta(mesa: Mesa) {
   color: var(--color-cyan);
   cursor: pointer;
   font-size: 13px;
-  padding: 4px 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-link:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.12);
+  color: #5df2ff;
+}
+
+.btn-link:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
 }
 
 .btn-link:disabled {
@@ -192,11 +222,6 @@ function onIniciarVenta(mesa: Mesa) {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-soft);
-  max-width: 360px;
 }
 
 .mesa-form h2 {
