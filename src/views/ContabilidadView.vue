@@ -82,6 +82,14 @@ function formatHora(hora: number): string {
 
       <p v-if="reporteMensual" class="ytd">
         Total acumulado del año en curso: <strong>{{ formatCOP(reporteMensual.ytd_total) }}</strong>
+        · Ganancia estimada: <strong>{{ formatCOP(reporteMensual.ytd_margen) }}</strong>
+        <span
+          v-if="reporteMensual.ytd_margen_incompleto"
+          class="tag tag--parcial"
+          title="Estimado parcial: algunos productos vendidos este año no tienen costo definido, así que la ganancia real es mayor a la mostrada."
+        >
+          Estimado parcial
+        </span>
       </p>
 
       <p v-if="isLoadingMensual" class="status">Cargando reporte mensual…</p>
@@ -94,6 +102,7 @@ function formatHora(hora: number): string {
             <th>Total</th>
             <th>Tickets</th>
             <th>Ticket promedio</th>
+            <th>Margen</th>
           </tr>
         </thead>
         <tbody>
@@ -102,6 +111,18 @@ function formatHora(hora: number): string {
             <td>{{ formatCOP(fila.total) }}</td>
             <td>{{ fila.num_ventas }}</td>
             <td>{{ formatCOP(fila.ticket_promedio) }}</td>
+            <td>
+              <span class="margen-cell">
+                {{ formatCOP(fila.margen) }}
+                <span
+                  v-if="fila.margen_incompleto"
+                  class="tag tag--parcial"
+                  title="Estimado parcial: algunos productos vendidos este mes no tienen costo definido, así que la ganancia real es mayor a la mostrada."
+                >
+                  Parcial
+                </span>
+              </span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -251,5 +272,26 @@ function formatHora(hora: number): string {
 
 .mensual-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.margen-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.tag--parcial {
+  color: var(--color-orange);
+  background: rgba(255, 138, 30, 0.14);
+  border: 1px solid rgba(255, 138, 30, 0.4);
+  cursor: help;
 }
 </style>

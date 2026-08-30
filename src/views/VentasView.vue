@@ -176,12 +176,30 @@ async function onConfirmarVenta() {
             class="search-input"
             placeholder="Buscar producto por nombre…"
           />
-          <select v-model="categoriaFiltro" class="categoria-select">
-            <option value="">Todas las categorías</option>
-            <option v-for="categoria in categorias" :key="categoria.id" :value="categoria.id">
+          <div class="categoria-chips" role="radiogroup" aria-label="Filtrar por categoría">
+            <button
+              type="button"
+              class="categoria-chip"
+              role="radio"
+              :aria-checked="categoriaFiltro === ''"
+              :class="{ 'categoria-chip--active': categoriaFiltro === '' }"
+              @click="categoriaFiltro = ''"
+            >
+              Todas
+            </button>
+            <button
+              v-for="categoria in categorias"
+              :key="categoria.id"
+              type="button"
+              class="categoria-chip"
+              role="radio"
+              :aria-checked="categoriaFiltro === categoria.id"
+              :class="{ 'categoria-chip--active': categoriaFiltro === categoria.id }"
+              @click="categoriaFiltro = categoria.id"
+            >
               {{ categoria.nombre }}
-            </option>
-          </select>
+            </button>
+          </div>
         </div>
 
         <p v-if="productosLoading" class="status">Cargando productos…</p>
@@ -346,14 +364,39 @@ async function onConfirmarVenta() {
   color: var(--color-text);
 }
 
-.categoria-select {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  font-size: 14px;
+.categoria-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.categoria-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+  color: var(--color-cyan);
+  background: rgba(0, 229, 255, 0.14);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.categoria-chip:hover:not(.categoria-chip--active) {
+  background: rgba(0, 229, 255, 0.22);
+}
+
+.categoria-chip--active {
   color: var(--color-text);
-  min-width: 200px;
+  background: rgba(123, 44, 191, 0.35);
+  border: 1px solid var(--color-border);
+}
+
+.categoria-chip:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
 }
 
 .status {

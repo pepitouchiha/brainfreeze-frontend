@@ -28,6 +28,8 @@ onMounted(() => {
 
 const totalHoy = computed(() => reporteHoy.value?.total ?? 0)
 const numVentasHoy = computed(() => reporteHoy.value?.num_ventas ?? 0)
+const margenHoy = computed(() => reporteHoy.value?.margen ?? 0)
+const margenHoyIncompleto = computed(() => reporteHoy.value?.margen_incompleto ?? false)
 const alertasCount = computed(() => alertasStock.value.length)
 const alertasPreview = computed(() => alertasStock.value.slice(0, 5))
 const ultimasVentas = computed(() => ventas.value.slice(0, 5))
@@ -50,6 +52,22 @@ function mesaNombre(mesaId: number | null): string {
         <p v-if="isLoadingHoy" class="status">Cargando…</p>
         <p v-else-if="errorHoy" class="error" role="alert">{{ errorHoy }}</p>
         <span v-else class="kpi-value kpi-value--lime">{{ formatCOP(totalHoy) }}</span>
+      </div>
+
+      <div class="kpi-card kpi-card--orange">
+        <span class="kpi-label">Ganancia estimada hoy</span>
+        <p v-if="isLoadingHoy" class="status">Cargando…</p>
+        <p v-else-if="errorHoy" class="error" role="alert">{{ errorHoy }}</p>
+        <template v-else>
+          <span class="kpi-value kpi-value--orange">{{ formatCOP(margenHoy) }}</span>
+          <span
+            v-if="margenHoyIncompleto"
+            class="tag tag--parcial"
+            title="Estimado parcial: algunos productos vendidos hoy no tienen costo definido, así que la ganancia real es mayor a la mostrada."
+          >
+            Estimado parcial
+          </span>
+        </template>
       </div>
 
       <div class="kpi-card kpi-card--cyan">
@@ -168,6 +186,10 @@ function mesaNombre(mesaId: number | null): string {
   border-top-color: var(--color-magenta);
 }
 
+.kpi-card--orange {
+  border-top-color: var(--color-orange);
+}
+
 .kpi-label {
   font-size: 12px;
   text-transform: uppercase;
@@ -192,6 +214,10 @@ function mesaNombre(mesaId: number | null): string {
 
 .kpi-value--magenta {
   color: var(--color-magenta);
+}
+
+.kpi-value--orange {
+  color: var(--color-orange);
 }
 
 .status {
@@ -303,6 +329,14 @@ function mesaNombre(mesaId: number | null): string {
   color: var(--color-magenta);
   background: rgba(255, 0, 127, 0.14);
   border: 1px solid rgba(255, 0, 127, 0.4);
+}
+
+.tag--parcial {
+  align-self: flex-start;
+  color: var(--color-orange);
+  background: rgba(255, 138, 30, 0.14);
+  border: 1px solid rgba(255, 138, 30, 0.4);
+  cursor: help;
 }
 
 .ventas-panel {

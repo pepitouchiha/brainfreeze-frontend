@@ -51,6 +51,7 @@ const form = reactive({
   nombre: '',
   categoria_id: '' as number | '',
   precio: '' as number | '',
+  costo: '' as number | '',
   estado: 'disponible' as EstadoProducto,
   imagenBase64: null as string | null,
 })
@@ -82,11 +83,17 @@ function categoriaNombre(categoriaId: number): string {
   return categorias.value.find((c) => c.id === categoriaId)?.nombre ?? 'Sin categoría'
 }
 
+function margenFor(producto: Producto): number | null {
+  if (producto.costo === null) return null
+  return producto.precio - producto.costo
+}
+
 function openCreateForm() {
   editingId.value = null
   form.nombre = ''
   form.categoria_id = categoriaFiltro.value !== '' ? categoriaFiltro.value : ''
   form.precio = ''
+  form.costo = ''
   form.estado = 'disponible'
   form.imagenBase64 = null
   imagenTouched.value = false
@@ -100,6 +107,7 @@ function openEditForm(producto: Producto) {
   form.nombre = producto.nombre
   form.categoria_id = producto.categoria_id
   form.precio = producto.precio
+  form.costo = producto.costo ?? ''
   form.estado = producto.estado
   form.imagenBase64 = producto.imagen_base64
   imagenTouched.value = false
@@ -153,6 +161,10 @@ async function onSubmit() {
     formError.value = 'El precio debe ser mayor a 0.'
     return
   }
+  if (form.costo !== '' && Number(form.costo) < 0) {
+    formError.value = 'El costo no puede ser negativo.'
+    return
+  }
 
   isSaving.value = true
   formError.value = ''
@@ -161,6 +173,7 @@ async function onSubmit() {
       nombre: form.nombre.trim(),
       categoria_id: Number(form.categoria_id),
       precio: Number(form.precio),
+      costo: form.costo === '' ? null : Number(form.costo),
       estado: form.estado,
       imagen_base64: imagenTouched.value ? form.imagenBase64 : undefined,
     }
@@ -288,6 +301,18 @@ async function onToggleEstado(producto: Producto, disponible: boolean) {
         </div>
 
         <div class="form-row">
+          <label for="prod-costo">Costo (opcional)</label>
+          <NumberInput
+            id="prod-costo"
+            v-model="form.costo"
+            :min="0"
+            :step="1"
+            placeholder="Ej. 3000"
+            :disabled="isSaving"
+          />
+        </div>
+
+        <div class="form-row">
           <label for="prod-estado">Estado</label>
           <div class="estado-toggle">
             <ToggleSwitch id="prod-estado" v-model="formEstadoDisponible" :disabled="isSaving" aria-label="Estado del producto" />
@@ -335,6 +360,7 @@ async function onToggleEstado(producto: Producto, disponible: boolean) {
           <th>Nombre</th>
           <th>Categoría</th>
           <th>Precio</th>
+          <th>Margen</th>
           <th>Estado</th>
           <th></th>
         </tr>
@@ -347,6 +373,12 @@ async function onToggleEstado(producto: Producto, disponible: boolean) {
           <td>{{ producto.nombre }}</td>
           <td>{{ categoriaNombre(producto.categoria_id) }}</td>
           <td>{{ formatCOP(producto.precio) }}</td>
+          <td>
+            <span v-if="producto.costo === null" class="margen margen--sin-definir" title="Costo no definido">
+              N/D
+            </span>
+            <span v-else class="margen">{{ formatCOP(margenFor(producto)!) }}</span>
+          </td>
           <td>
             <div class="estado-toggle">
               <ToggleSwitch
@@ -629,6 +661,16 @@ async function onToggleEstado(producto: Producto, disponible: boolean) {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.margen {
+  font-variant-numeric: tabular-nums;
+}
+
+.margen--sin-definir {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 12.5px;
 }
 
 .estado-toggle {

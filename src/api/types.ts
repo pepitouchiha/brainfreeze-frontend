@@ -60,6 +60,7 @@ export interface Producto {
   nombre: string
   categoria_id: number
   precio: number
+  costo: number | null
   estado: EstadoProducto
   sabor: string | null
   tamano: string | null
@@ -71,6 +72,7 @@ export interface ProductoCreate {
   nombre: string
   categoria_id: number
   precio: number
+  costo?: number | null
   estado?: EstadoProducto
   sabor?: string | null
   tamano?: string | null
@@ -81,6 +83,7 @@ export interface ProductoUpdate {
   nombre?: string
   categoria_id?: number
   precio?: number
+  costo?: number | null
   estado?: EstadoProducto
   sabor?: string | null
   tamano?: string | null
@@ -171,6 +174,8 @@ export interface ReporteHoyOut {
   total: number
   num_ventas: number
   por_hora: VentaPorHora[]
+  margen: number
+  margen_incompleto: boolean
 }
 
 export interface VentaPorMes {
@@ -179,9 +184,13 @@ export interface VentaPorMes {
   total: number
   num_ventas: number
   ticket_promedio: number
+  margen: number
+  margen_incompleto: boolean
 }
 
 export interface ReporteMensualOut {
   meses: VentaPorMes[]
   ytd_total: number
+  ytd_margen: number
+  ytd_margen_incompleto: boolean
 }
