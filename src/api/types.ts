@@ -49,6 +49,10 @@ export interface MesaCreate {
   nombre_o_numero: string
 }
 
+export interface MesaUpdate {
+  nombre_o_numero: string
+}
+
 /**
  * Contrato de /productos confirmado contra el backend real
  * (backend/app/schemas/producto.py).
@@ -131,6 +135,12 @@ export interface AjusteStock {
  */
 export type MetodoPago = 'efectivo' | 'transferencia'
 
+/**
+ * Contrato de `estado` agregado por BE-020 (soft-delete de una venta) y
+ * BE-025 (`abierta`: pedido en curso en una mesa, todavía sin cobrar).
+ */
+export type EstadoVenta = 'activa' | 'cancelada' | 'abierta'
+
 export interface VentaItemCreate {
   producto_id: number
   cantidad: number
@@ -140,6 +150,31 @@ export interface VentaCreate {
   items: VentaItemCreate[]
   metodo_pago: MetodoPago
   mesa_id?: number | null
+}
+
+/**
+ * Payload de `PUT /ventas/{id}` (BE-021): misma forma que `VentaCreate`
+ * (reemplazo completo de items/mesa/método de pago).
+ */
+export interface VentaUpdate {
+  items: VentaItemCreate[]
+  metodo_pago: MetodoPago
+  mesa_id?: number | null
+}
+
+/** Payload de `POST /ventas/abrir` (BE-025): abre un pedido vacío en una mesa. */
+export interface VentaAbrir {
+  mesa_id: number
+}
+
+/** Payload de `POST /ventas/{id}/items` (BE-026): agrega líneas nuevas a un pedido abierto. */
+export interface VentaAgregarItems {
+  items: VentaItemCreate[]
+}
+
+/** Payload de `POST /ventas/{id}/cerrar` (BE-027): cobra y cierra un pedido abierto. */
+export interface VentaCerrar {
+  metodo_pago: MetodoPago
 }
 
 export interface VentaItem {
@@ -152,7 +187,9 @@ export interface VentaItem {
 export interface Venta {
   id: number
   mesa_id: number | null
-  metodo_pago: MetodoPago
+  /** `null` mientras la venta está `abierta` (BE-025): se asigna al cerrarla. */
+  metodo_pago: MetodoPago | null
+  estado: EstadoVenta
   total: number
   creado_en: string
   items: VentaItem[]

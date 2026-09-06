@@ -1,16 +1,23 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { useMesas } from '../composables/useMesas'
+import { useVentas } from '../composables/useVentas'
 import { useToast } from '../composables/useToast'
+import { listVentas } from '../api/ventas'
+import { ApiError } from '../api/client'
 import BaseModal from '../components/common/BaseModal.vue'
-import type { Mesa } from '../api/types'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
+import IconPencil from '../components/icons/IconPencil.vue'
+import IconTrash from '../components/icons/IconTrash.vue'
+import PedidoEnCursoModal from '../components/PedidoEnCursoModal.vue'
+import type { Mesa, Venta } from '../api/types'
 
-const router = useRouter()
-const { mesas, isLoading, loadError, load, create, liberar, messageFor } = useMesas()
+const { mesas, isLoading, loadError, load, create, liberar, update, remove, messageFor } = useMesas()
+const { abrirPedido } = useVentas()
 const { push: pushToast } = useToast()
 
 const isFormOpen = ref(false)
+const editingId = ref<number | null>(null)
 const nombre = ref('')
 const formError = ref('')
 const isSaving = ref(false)
@@ -18,16 +25,53 @@ const isSaving = ref(false)
 const liberandoId = ref<number | null>(null)
 const liberarErrorFor = ref<Record<number, string>>({})
 
-onMounted(load)
+const abriendoId = ref<number | null>(null)
+const pedidoErrorFor = ref<Record<number, string>>({})
+
+const pedidoAbierto = ref<Venta | null>(null)
+const pedidoMesaNombre = ref('')
+const ocupadaSinPedidoFor = ref<Record<number, boolean>>({})
+
+const mesasConPedidoAbiertoIds = ref<Set<number>>(new Set())
+
+const deletingId = ref<number | null>(null)
+const deleteErrorFor = ref<Record<number, string>>({})
+const pendingDelete = ref<Mesa | null>(null)
+const deleteModalError = ref('')
+
+async function refreshMesasConPedidoAbierto() {
+  try {
+    const abiertas = await listVentas({ estado: 'abierta' })
+    mesasConPedidoAbiertoIds.value = new Set(
+      abiertas.filter((venta) => venta.mesa_id !== null).map((venta) => venta.mesa_id as number),
+    )
+  } catch {
+    mesasConPedidoAbiertoIds.value = new Set()
+  }
+}
+
+onMounted(() => {
+  load()
+  refreshMesasConPedidoAbierto()
+})
 
 function openCreateForm() {
+  editingId.value = null
   nombre.value = ''
+  formError.value = ''
+  isFormOpen.value = true
+}
+
+function openEditForm(mesa: Mesa) {
+  editingId.value = mesa.id
+  nombre.value = mesa.nombre_o_numero
   formError.value = ''
   isFormOpen.value = true
 }
 
 function closeForm() {
   isFormOpen.value = false
+  editingId.value = null
   formError.value = ''
 }
 
@@ -40,13 +84,55 @@ async function onSubmit() {
   isSaving.value = true
   formError.value = ''
   try {
-    await create({ nombre_o_numero: nombre.value.trim() })
-    pushToast('Mesa creada')
+    if (editingId.value === null) {
+      await create({ nombre_o_numero: nombre.value.trim() })
+      pushToast('Mesa creada')
+    } else {
+      await update(editingId.value, { nombre_o_numero: nombre.value.trim() })
+      pushToast('Mesa actualizada')
+    }
     closeForm()
   } catch (err) {
-    formError.value = messageFor(err, 'No fue posible crear la mesa.')
+    formError.value = messageFor(
+      err,
+      editingId.value === null ? 'No fue posible crear la mesa.' : 'No fue posible actualizar la mesa.',
+    )
   } finally {
     isSaving.value = false
+  }
+}
+
+function requestDelete(mesa: Mesa) {
+  pendingDelete.value = mesa
+  deleteModalError.value = ''
+}
+
+function cancelDelete() {
+  pendingDelete.value = null
+  deleteModalError.value = ''
+}
+
+async function confirmDelete() {
+  const mesa = pendingDelete.value
+  if (!mesa) return
+
+  delete deleteErrorFor.value[mesa.id]
+  deleteModalError.value = ''
+  deletingId.value = mesa.id
+  try {
+    await remove(mesa.id)
+    pendingDelete.value = null
+    pushToast('Mesa eliminada')
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      deleteErrorFor.value[mesa.id] =
+        'No se puede eliminar esta mesa porque tiene ventas registradas en su historial.'
+      pendingDelete.value = null
+    } else {
+      deleteModalError.value = messageFor(err, 'No fue posible eliminar la mesa.')
+    }
+  } finally {
+    deletingId.value = null
   }
 }
 
@@ -63,8 +149,57 @@ async function onLiberar(mesa: Mesa) {
   }
 }
 
-function onIniciarVenta(mesa: Mesa) {
-  router.push({ name: 'ventas', query: { mesaId: String(mesa.id) } })
+async function onAbrirMesa(mesa: Mesa) {
+  delete pedidoErrorFor.value[mesa.id]
+  delete ocupadaSinPedidoFor.value[mesa.id]
+
+  if (mesa.estado === 'libre') {
+    abriendoId.value = mesa.id
+    try {
+      const nuevaVenta = await abrirPedido({ mesa_id: mesa.id })
+      pedidoAbierto.value = nuevaVenta
+      pedidoMesaNombre.value = mesa.nombre_o_numero
+      await Promise.all([load(), refreshMesasConPedidoAbierto()])
+    } catch (err) {
+      pedidoErrorFor.value[mesa.id] = messageFor(err, 'No fue posible abrir el pedido.')
+    } finally {
+      abriendoId.value = null
+    }
+    return
+  }
+
+  abriendoId.value = mesa.id
+  try {
+    const ventasAbiertas = await listVentas({ mesa_id: mesa.id, estado: 'abierta' })
+    if (ventasAbiertas.length > 0) {
+      pedidoAbierto.value = ventasAbiertas[0]
+      pedidoMesaNombre.value = mesa.nombre_o_numero
+    } else {
+      ocupadaSinPedidoFor.value[mesa.id] = true
+    }
+  } catch (err) {
+    pedidoErrorFor.value[mesa.id] = messageFor(err, 'No fue posible buscar el pedido abierto.')
+  } finally {
+    abriendoId.value = null
+  }
+}
+
+function onPedidoSettled() {
+  pedidoAbierto.value = null
+  pedidoMesaNombre.value = ''
+  ocupadaSinPedidoFor.value = {}
+  load()
+  refreshMesasConPedidoAbierto()
+}
+
+function tituloMarcarLibre(mesa: Mesa): string | undefined {
+  if (!mesasConPedidoAbiertoIds.value.has(mesa.id)) return undefined
+  return "Usa 'Ver pedido' para cobrar o descartar el pedido en curso"
+}
+
+function onCerrarPanel() {
+  pedidoAbierto.value = null
+  pedidoMesaNombre.value = ''
 }
 </script>
 
@@ -77,7 +212,7 @@ function onIniciarVenta(mesa: Mesa) {
 
     <BaseModal v-if="isFormOpen" @close="closeForm">
       <form class="mesa-form" @submit.prevent="onSubmit">
-        <h2>Nueva mesa</h2>
+        <h2>{{ editingId === null ? 'Nueva mesa' : 'Editar mesa' }}</h2>
 
         <div class="form-row">
           <label for="mesa-nombre">Nombre o número</label>
@@ -95,7 +230,7 @@ function onIniciarVenta(mesa: Mesa) {
         <div class="form-actions">
           <button type="button" class="btn-secondary" :disabled="isSaving" @click="closeForm">Cancelar</button>
           <button type="submit" class="btn-primary" :disabled="isSaving">
-            {{ isSaving ? 'Creando…' : 'Crear' }}
+            {{ isSaving ? 'Guardando…' : editingId === null ? 'Crear' : 'Guardar' }}
           </button>
         </div>
       </form>
@@ -115,24 +250,83 @@ function onIniciarVenta(mesa: Mesa) {
         </div>
 
         <div class="mesa-actions">
-          <button type="button" class="btn-secondary" @click="onIniciarVenta(mesa)">
-            Iniciar venta
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="abriendoId === mesa.id"
+            @click="onAbrirMesa(mesa)"
+          >
+            {{ abriendoId === mesa.id ? 'Abriendo…' : mesa.estado === 'libre' ? 'Abrir mesa' : 'Ver pedido' }}
           </button>
           <button
             type="button"
             class="btn-link"
-            :disabled="mesa.estado === 'libre' || liberandoId === mesa.id"
+            :disabled="mesa.estado === 'libre' || liberandoId === mesa.id || mesasConPedidoAbiertoIds.has(mesa.id)"
+            :title="tituloMarcarLibre(mesa)"
             @click="onLiberar(mesa)"
           >
             {{ liberandoId === mesa.id ? 'Liberando…' : 'Marcar libre' }}
           </button>
         </div>
 
+        <div class="mesa-icon-actions">
+          <button
+            type="button"
+            class="btn-link"
+            aria-label="Editar mesa"
+            title="Editar mesa"
+            @click="openEditForm(mesa)"
+          >
+            <IconPencil />
+          </button>
+          <button
+            type="button"
+            class="btn-link btn-link--danger"
+            :disabled="deletingId === mesa.id"
+            :aria-label="deletingId === mesa.id ? 'Eliminando mesa…' : 'Eliminar mesa'"
+            :title="deletingId === mesa.id ? 'Eliminando mesa…' : 'Eliminar mesa'"
+            :aria-busy="deletingId === mesa.id"
+            @click="requestDelete(mesa)"
+          >
+            <IconTrash />
+          </button>
+        </div>
+
         <p v-if="liberarErrorFor[mesa.id]" class="error error--inline" role="alert">
           {{ liberarErrorFor[mesa.id] }}
         </p>
+        <p v-if="pedidoErrorFor[mesa.id]" class="error error--inline" role="alert">
+          {{ pedidoErrorFor[mesa.id] }}
+        </p>
+        <p v-if="deleteErrorFor[mesa.id]" class="error error--inline" role="alert">
+          {{ deleteErrorFor[mesa.id] }}
+        </p>
+        <p v-if="ocupadaSinPedidoFor[mesa.id]" class="status status--inline">
+          Esta mesa está ocupada por una venta directa (sin pedido progresivo).
+        </p>
+        <p v-if="mesasConPedidoAbiertoIds.has(mesa.id)" class="status status--inline">
+          Tiene un pedido en curso: usa "Ver pedido" para cobrar o descartar antes de marcar libre.
+        </p>
       </li>
     </ul>
+
+    <PedidoEnCursoModal
+      v-if="pedidoAbierto"
+      :venta="pedidoAbierto"
+      :mesa-nombre="pedidoMesaNombre"
+      @settled="onPedidoSettled"
+      @close="onCerrarPanel"
+    />
+
+    <ConfirmModal
+      v-if="pendingDelete"
+      title="Eliminar mesa"
+      :message="`¿Eliminar la mesa «${pendingDelete.nombre_o_numero}»? Esta acción no se puede deshacer.`"
+      :is-confirming="deletingId === pendingDelete.id"
+      :error-message="deleteModalError"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </section>
 </template>
 
@@ -218,6 +412,19 @@ function onIniciarVenta(mesa: Mesa) {
   cursor: not-allowed;
 }
 
+.btn-link--danger {
+  color: var(--color-danger);
+}
+
+.btn-link--danger:hover:not(:disabled) {
+  background: rgba(255, 77, 109, 0.14);
+  color: #ff7d91;
+}
+
+.btn-link--danger:focus-visible {
+  outline-color: var(--color-danger);
+}
+
 .mesa-form {
   display: flex;
   flex-direction: column;
@@ -268,6 +475,11 @@ function onIniciarVenta(mesa: Mesa) {
 
 .error--inline {
   margin-top: 8px;
+}
+
+.status--inline {
+  margin-top: 8px;
+  font-size: 12.5px;
 }
 
 .mesa-list {
@@ -326,5 +538,13 @@ function onIniciarVenta(mesa: Mesa) {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.mesa-icon-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: -4px;
 }
 </style>

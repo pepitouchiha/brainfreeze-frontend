@@ -1,27 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useProductos } from '../composables/useProductos'
 import { useCategorias } from '../composables/useCategorias'
 import { useMesas } from '../composables/useMesas'
 import { useCarrito } from '../composables/useCarrito'
 import { useVentas } from '../composables/useVentas'
+import { useToast } from '../composables/useToast'
 import ProductoThumbnail from '../components/common/ProductoThumbnail.vue'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
 import IconBanknote from '../components/icons/IconBanknote.vue'
 import IconTransfer from '../components/icons/IconTransfer.vue'
 import { formatCOP } from '../utils/currency'
 import type { MetodoPago, Producto, Venta } from '../api/types'
 
-interface Ticket {
-  ventaId: number
-  mesaNombre: string | null
-  metodoPago: MetodoPago
-  total: number
-  lineas: { nombre: string; cantidad: number; precioUnitario: number; subtotal: number }[]
-}
-
 const route = useRoute()
-const router = useRouter()
 
 const { productos, isLoading: productosLoading, loadError: productosError, load: loadProductos } =
   useProductos()
@@ -29,6 +22,7 @@ const { categorias, load: loadCategorias } = useCategorias()
 const { mesas, isLoading: mesasLoading, loadError: mesasError, load: loadMesas } = useMesas()
 const carrito = useCarrito()
 const { create: crearVenta, messageFor } = useVentas()
+const { push: pushToast } = useToast()
 
 const search = ref('')
 const categoriaFiltro = ref<number | ''>('')
@@ -37,7 +31,7 @@ const metodoPago = ref<MetodoPago>('efectivo')
 
 const isSaving = ref(false)
 const saveError = ref('')
-const ticket = ref<Ticket | null>(null)
+const showConfirmVenta = ref(false)
 
 const productosFiltrados = computed<Producto[]>(() => {
   const texto = search.value.trim().toLowerCase()
@@ -51,6 +45,18 @@ const productosFiltrados = computed<Producto[]>(() => {
 const mesaSeleccionadaNombre = computed(() => {
   if (mesaSeleccionada.value === '') return null
   return mesas.value.find((m) => m.id === mesaSeleccionada.value)?.nombre_o_numero ?? null
+})
+
+const cantidadItems = computed(() =>
+  carrito.lineas.value.reduce((acc, linea) => acc + linea.cantidad, 0),
+)
+
+const resumenConfirmacion = computed(() => {
+  const items = cantidadItems.value
+  const itemsLabel = `${items} producto${items === 1 ? '' : 's'}`
+  const mesaLabel = mesaSeleccionadaNombre.value ?? 'Venta libre'
+  const metodoLabel = metodoPago.value === 'efectivo' ? 'Efectivo' : 'Transferencia'
+  return `${itemsLabel} · Total ${formatCOP(carrito.total.value)} · ${mesaLabel} · ${metodoLabel}`
 })
 
 onMounted(async () => {
@@ -80,21 +86,20 @@ function resetVentaForm() {
   saveError.value = ''
 }
 
-function onNuevaVenta() {
-  ticket.value = null
-  resetVentaForm()
-}
-
-function onVolverAMesas() {
-  router.push({ name: 'mesas' })
-}
-
-async function onConfirmarVenta() {
+function onConfirmarVenta() {
   if (carrito.lineas.value.length === 0) {
     saveError.value = 'Agrega al menos un producto al carrito.'
     return
   }
+  saveError.value = ''
+  showConfirmVenta.value = true
+}
 
+function cancelConfirmarVenta() {
+  showConfirmVenta.value = false
+}
+
+async function confirmarVentaDefinitiva() {
   isSaving.value = true
   saveError.value = ''
   try {
@@ -105,27 +110,14 @@ async function onConfirmarVenta() {
     }
     const venta: Venta = await crearVenta(payload)
 
-    ticket.value = {
-      ventaId: venta.id,
-      mesaNombre: mesaSeleccionadaNombre.value,
-      metodoPago: venta.metodo_pago,
-      total: venta.total,
-      lineas: venta.items.map((item) => {
-        const producto = productos.value.find((p) => p.id === item.producto_id)
-        return {
-          nombre: producto?.nombre ?? `Producto #${item.producto_id}`,
-          cantidad: item.cantidad,
-          precioUnitario: item.precio_unitario,
-          subtotal: item.precio_unitario * item.cantidad,
-        }
-      }),
-    }
-
+    showConfirmVenta.value = false
+    pushToast('Venta confirmada exitosamente')
     resetVentaForm()
     if (venta.mesa_id !== null) {
       await loadMesas()
     }
   } catch (err) {
+    showConfirmVenta.value = false
     saveError.value = messageFor(err, 'No fue posible registrar la venta.')
   } finally {
     isSaving.value = false
@@ -139,35 +131,7 @@ async function onConfirmarVenta() {
       <h1>Ventas</h1>
     </header>
 
-    <div v-if="ticket" class="ticket">
-      <h2>Venta #{{ ticket.ventaId }} registrada</h2>
-      <p class="ticket-meta">
-        Método de pago: <strong>{{ ticket.metodoPago === 'efectivo' ? 'Efectivo' : 'Transferencia' }}</strong>
-        <span v-if="ticket.mesaNombre"> · Mesa: <strong>{{ ticket.mesaNombre }}</strong></span>
-        <span v-else> · Venta libre</span>
-      </p>
-
-      <ul class="ticket-lineas">
-        <li v-for="(linea, idx) in ticket.lineas" :key="idx">
-          <span>{{ linea.cantidad }} × {{ linea.nombre }}</span>
-          <span>{{ formatCOP(linea.subtotal) }}</span>
-        </li>
-      </ul>
-
-      <div class="ticket-total">
-        <span>Total</span>
-        <span>{{ formatCOP(ticket.total) }}</span>
-      </div>
-
-      <div class="ticket-actions">
-        <button type="button" class="btn-secondary" @click="onNuevaVenta">Nueva venta</button>
-        <button v-if="ticket.mesaNombre" type="button" class="btn-primary" @click="onVolverAMesas">
-          Volver a Mesas
-        </button>
-      </div>
-    </div>
-
-    <div v-else class="pos-layout">
+    <div class="pos-layout">
       <div class="catalogo">
         <div class="filters">
           <input
@@ -312,6 +276,19 @@ async function onConfirmarVenta() {
         </button>
       </div>
     </div>
+
+    <ConfirmModal
+      v-if="showConfirmVenta"
+      title="Confirmar venta"
+      :message="resumenConfirmacion"
+      confirm-text="Confirmar venta"
+      confirming-text="Registrando…"
+      cancel-text="Volver"
+      variant="primary"
+      :is-confirming="isSaving"
+      @confirm="confirmarVentaDefinitiva"
+      @cancel="cancelConfirmarVenta"
+    />
   </section>
 </template>
 
@@ -664,73 +641,6 @@ async function onConfirmarVenta() {
 .btn-confirmar {
   width: 100%;
   padding: 12px 16px;
-}
-
-.btn-secondary {
-  padding: 10px 16px;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 13.5px;
-  color: var(--color-text);
-  background: transparent;
-  border: 1px solid var(--color-border);
-}
-
-.ticket {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 24px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-soft);
-  max-width: 480px;
-}
-
-.ticket h2 {
-  margin: 0;
-  font-size: 17px;
-  color: var(--color-text);
-}
-
-.ticket-meta {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
-
-.ticket-lineas {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ticket-lineas li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 13.5px;
-  color: var(--color-text);
-}
-
-.ticket-total {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text);
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border-soft);
-}
-
-.ticket-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 @media (max-width: 860px) {

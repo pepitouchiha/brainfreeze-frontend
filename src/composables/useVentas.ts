@@ -1,7 +1,26 @@
 import { ref } from 'vue'
-import { crearVenta, listVentas } from '../api/ventas'
+import {
+  abrirPedido,
+  actualizarVenta,
+  agregarItemsPedido,
+  cancelarVenta,
+  cerrarPedido,
+  crearVenta,
+  descartarPedido,
+  listVentas,
+  obtenerVenta,
+  quitarItemPedido,
+} from '../api/ventas'
+import type { ListVentasParams } from '../api/ventas'
 import { ApiError } from '../api/client'
-import type { Venta, VentaCreate } from '../api/types'
+import type {
+  Venta,
+  VentaAbrir,
+  VentaAgregarItems,
+  VentaCerrar,
+  VentaCreate,
+  VentaUpdate,
+} from '../api/types'
 
 export function useVentas() {
   const ventas = ref<Venta[]>([])
@@ -12,16 +31,48 @@ export function useVentas() {
     return crearVenta(payload)
   }
 
-  async function load(): Promise<void> {
+  async function load(filters: ListVentasParams = {}): Promise<void> {
     isLoading.value = true
     loadError.value = ''
     try {
-      ventas.value = await listVentas()
+      ventas.value = await listVentas(filters)
     } catch {
       loadError.value = 'No fue posible cargar las ventas. Intenta de nuevo.'
     } finally {
       isLoading.value = false
     }
+  }
+
+  function cancel(id: number): Promise<Venta> {
+    return cancelarVenta(id)
+  }
+
+  function getById(id: number): Promise<Venta> {
+    return obtenerVenta(id)
+  }
+
+  function update(id: number, payload: VentaUpdate): Promise<Venta> {
+    return actualizarVenta(id, payload)
+  }
+
+  function abrirPedidoNuevo(payload: VentaAbrir): Promise<Venta> {
+    return abrirPedido(payload)
+  }
+
+  function agregarItems(id: number, payload: VentaAgregarItems): Promise<Venta> {
+    return agregarItemsPedido(id, payload)
+  }
+
+  function quitarItem(id: number, itemId: number): Promise<Venta> {
+    return quitarItemPedido(id, itemId)
+  }
+
+  function cerrarPedidoActual(id: number, payload: VentaCerrar): Promise<Venta> {
+    return cerrarPedido(id, payload)
+  }
+
+  function descartarPedidoActual(id: number): Promise<Venta | null> {
+    return descartarPedido(id)
   }
 
   function messageFor(err: unknown, fallback: string): string {
@@ -31,5 +82,20 @@ export function useVentas() {
     return fallback
   }
 
-  return { ventas, isLoading, loadError, create, load, messageFor }
+  return {
+    ventas,
+    isLoading,
+    loadError,
+    create,
+    load,
+    cancel,
+    getById,
+    update,
+    abrirPedido: abrirPedidoNuevo,
+    agregarItems,
+    quitarItem,
+    cerrarPedido: cerrarPedidoActual,
+    descartarPedido: descartarPedidoActual,
+    messageFor,
+  }
 }

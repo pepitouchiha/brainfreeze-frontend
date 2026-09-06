@@ -32,7 +32,7 @@ const margenHoy = computed(() => reporteHoy.value?.margen ?? 0)
 const margenHoyIncompleto = computed(() => reporteHoy.value?.margen_incompleto ?? false)
 const alertasCount = computed(() => alertasStock.value.length)
 const alertasPreview = computed(() => alertasStock.value.slice(0, 5))
-const ultimasVentas = computed(() => ventas.value.slice(0, 5))
+const ultimasVentas = computed(() => ventas.value.filter((v) => v.estado !== 'abierta').slice(0, 5))
 
 function mesaNombre(mesaId: number | null): string {
   if (mesaId === null) return 'Venta libre'

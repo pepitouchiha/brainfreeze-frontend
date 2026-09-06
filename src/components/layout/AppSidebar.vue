@@ -45,6 +45,12 @@ const navItems: NavItem[] = [
     icon: '<circle cx="9" cy="20" r="1"></circle><circle cx="18" cy="20" r="1"></circle><path d="M2.5 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.6L21 8H6"></path>',
   },
   {
+    to: '/ordenes',
+    label: 'Órdenes',
+    accent: 'magenta',
+    icon: '<path d="M6 2h12v19l-3-2-3 2-3-2-3 2V2z"></path><path d="M9 7h6"></path><path d="M9 11h6"></path><path d="M9 15h4"></path>',
+  },
+  {
     to: '/contabilidad',
     label: 'Contabilidad',
     accent: 'lime',

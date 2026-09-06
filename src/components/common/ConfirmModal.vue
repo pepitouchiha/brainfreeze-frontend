@@ -9,12 +9,16 @@ withDefaults(
     confirmingText?: string
     cancelText?: string
     isConfirming?: boolean
+    variant?: 'danger' | 'primary'
+    errorMessage?: string
   }>(),
   {
     confirmText: 'Eliminar',
     confirmingText: 'Eliminando…',
     cancelText: 'Cancelar',
     isConfirming: false,
+    variant: 'danger',
+    errorMessage: '',
   },
 )
 
@@ -26,11 +30,17 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>()
     <div class="confirm-modal">
       <h2>{{ title }}</h2>
       <p class="confirm-message">{{ message }}</p>
+      <p v-if="errorMessage" class="confirm-error" role="alert">{{ errorMessage }}</p>
       <div class="confirm-actions">
         <button type="button" class="btn-secondary" :disabled="isConfirming" @click="emit('cancel')">
           {{ cancelText }}
         </button>
-        <button type="button" class="btn-danger" :disabled="isConfirming" @click="emit('confirm')">
+        <button
+          type="button"
+          :class="variant === 'primary' ? 'btn-primary' : 'btn-danger'"
+          :disabled="isConfirming"
+          @click="emit('confirm')"
+        >
           {{ isConfirming ? confirmingText : confirmText }}
         </button>
       </div>
@@ -56,6 +66,12 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>()
   font-size: 14px;
   line-height: 1.5;
   color: var(--color-text-muted);
+}
+
+.confirm-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-danger);
 }
 
 .confirm-actions {
@@ -92,6 +108,22 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>()
 }
 
 .btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: #fff;
+  background: linear-gradient(90deg, var(--color-purple), var(--color-purple-deep));
+}
+
+.btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
