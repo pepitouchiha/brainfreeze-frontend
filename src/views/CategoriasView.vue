@@ -1,15 +1,26 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useCategorias } from '../composables/useCategorias'
+import { useProductos } from '../composables/useProductos'
 import { useToast } from '../composables/useToast'
 import BaseModal from '../components/common/BaseModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import ProductoThumbnail from '../components/common/ProductoThumbnail.vue'
 import IconPencil from '../components/icons/IconPencil.vue'
 import IconTrash from '../components/icons/IconTrash.vue'
+import { formatCOP } from '../utils/currency'
 import type { Categoria } from '../api/types'
 
 const { categorias, isLoading, loadError, load, create, update, remove, messageFor } = useCategorias()
+const {
+  productos: productosCategoria,
+  isLoading: isLoadingProductos,
+  loadError: productosError,
+  load: loadProductosCategoria,
+} = useProductos()
 const { push: pushToast } = useToast()
+
+const viewingCategoria = ref<Categoria | null>(null)
 
 const isFormOpen = ref(false)
 const editingId = ref<number | null>(null)
@@ -67,6 +78,15 @@ async function onSubmit() {
   } finally {
     isSaving.value = false
   }
+}
+
+function openProductos(categoria: Categoria) {
+  viewingCategoria.value = categoria
+  loadProductosCategoria({ categoria_id: categoria.id })
+}
+
+function closeProductos() {
+  viewingCategoria.value = null
 }
 
 function requestDelete(categoria: Categoria) {
@@ -144,6 +164,10 @@ async function confirmDelete() {
         :key="categoria.id"
         class="category-card"
         :style="{ borderTopColor: categoria.color }"
+        role="button"
+        tabindex="0"
+        @click="openProductos(categoria)"
+        @keydown.enter="openProductos(categoria)"
       >
         <span class="swatch" :style="{ backgroundColor: categoria.color }"></span>
         <div class="category-info">
@@ -156,7 +180,7 @@ async function confirmDelete() {
             class="btn-link"
             aria-label="Editar categoría"
             title="Editar categoría"
-            @click="openEditForm(categoria)"
+            @click.stop="openEditForm(categoria)"
           >
             <IconPencil />
           </button>
@@ -167,7 +191,7 @@ async function confirmDelete() {
             :aria-label="deletingId === categoria.id ? 'Eliminando categoría…' : 'Eliminar categoría'"
             :title="deletingId === categoria.id ? 'Eliminando categoría…' : 'Eliminar categoría'"
             :aria-busy="deletingId === categoria.id"
-            @click="requestDelete(categoria)"
+            @click.stop="requestDelete(categoria)"
           >
             <IconTrash />
           </button>
@@ -177,6 +201,35 @@ async function confirmDelete() {
         </p>
       </li>
     </ul>
+
+    <BaseModal v-if="viewingCategoria" @close="closeProductos">
+      <div class="productos-popup">
+        <header class="productos-popup-header">
+          <span class="swatch" :style="{ backgroundColor: viewingCategoria.color }"></span>
+          <h2>{{ viewingCategoria.nombre }}</h2>
+        </header>
+
+        <p v-if="isLoadingProductos" class="status">Cargando productos…</p>
+        <p v-else-if="productosError" class="error" role="alert">{{ productosError }}</p>
+        <p v-else-if="productosCategoria.length === 0" class="status">
+          Esta categoría todavía no tiene productos asociados.
+        </p>
+
+        <ul v-else class="productos-popup-list">
+          <li v-for="producto in productosCategoria" :key="producto.id" class="productos-popup-item">
+            <ProductoThumbnail :src="producto.imagen_base64" :alt="producto.nombre" variant="thumb" />
+            <div class="productos-popup-info">
+              <span class="productos-popup-nombre">{{ producto.nombre }}</span>
+              <span class="productos-popup-precio">{{ formatCOP(producto.precio) }}</span>
+            </div>
+          </li>
+        </ul>
+
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" @click="closeProductos">Cerrar</button>
+        </div>
+      </div>
+    </BaseModal>
 
     <ConfirmModal
       v-if="pendingDelete"
@@ -369,6 +422,17 @@ async function confirmDelete() {
   background: var(--color-surface);
   border: 1px solid var(--color-border-soft);
   border-top: 3px solid var(--color-border-soft);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.category-card:hover {
+  border-color: var(--color-border);
+}
+
+.category-card:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
 }
 
 .swatch {
@@ -398,5 +462,68 @@ async function confirmDelete() {
 .category-actions {
   display: flex;
   gap: 8px;
+}
+
+.productos-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.productos-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.productos-popup-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--color-text);
+}
+
+.productos-popup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.productos-popup-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.productos-popup-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.productos-popup-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.productos-popup-nombre {
+  font-size: 13.5px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.productos-popup-precio {
+  font-size: 12px;
+  color: var(--color-lime);
 }
 </style>

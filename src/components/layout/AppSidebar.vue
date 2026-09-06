@@ -21,12 +21,6 @@ const navItems: NavItem[] = [
     icon: '<rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect>',
   },
   {
-    to: '/inventario',
-    label: 'Inventario',
-    accent: 'lime',
-    icon: '<path d="M3 7l9-4 9 4-9 4-9-4z"></path><path d="M3 7v10l9 4 9-4V7"></path><path d="M12 11v10"></path>',
-  },
-  {
     to: '/productos',
     label: 'Productos',
     accent: 'magenta',

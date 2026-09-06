@@ -56,7 +56,12 @@ const form = reactive({
   imagenBase64: null as string | null,
 })
 const imagenTouched = ref(false)
+const imagenFileName = ref('')
 const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
 const formError = ref('')
 const isSaving = ref(false)
 
@@ -97,6 +102,7 @@ function openCreateForm() {
   form.estado = 'disponible'
   form.imagenBase64 = null
   imagenTouched.value = false
+  imagenFileName.value = ''
   if (fileInputRef.value) fileInputRef.value.value = ''
   formError.value = ''
   isFormOpen.value = true
@@ -111,6 +117,7 @@ function openEditForm(producto: Producto) {
   form.estado = producto.estado
   form.imagenBase64 = producto.imagen_base64
   imagenTouched.value = false
+  imagenFileName.value = ''
   if (fileInputRef.value) fileInputRef.value.value = ''
   formError.value = ''
   isFormOpen.value = true
@@ -134,6 +141,7 @@ function onImageSelected(event: Event) {
   }
 
   formError.value = ''
+  imagenFileName.value = file.name
   const reader = new FileReader()
   reader.onload = () => {
     form.imagenBase64 = reader.result as string
@@ -144,6 +152,7 @@ function onImageSelected(event: Event) {
 
 function onRemoveImage() {
   form.imagenBase64 = null
+  imagenFileName.value = ''
   imagenTouched.value = true
   if (fileInputRef.value) fileInputRef.value.value = ''
 }
@@ -327,9 +336,21 @@ async function onToggleEstado(producto: Producto, disponible: boolean) {
             ref="fileInputRef"
             type="file"
             accept="image/*"
+            class="file-input-hidden"
             :disabled="isSaving"
             @change="onImageSelected"
           />
+          <div class="file-picker">
+            <button
+              type="button"
+              class="btn-secondary btn-file"
+              :disabled="isSaving"
+              @click="triggerFileInput"
+            >
+              Elegir imagen
+            </button>
+            <span class="file-picker-name">{{ imagenFileName || 'Ningún archivo seleccionado' }}</span>
+          </div>
           <div v-if="form.imagenBase64" class="imagen-preview">
             <ProductoThumbnail :src="form.imagenBase64" alt="Vista previa de la imagen" variant="card" />
             <button type="button" class="btn-link btn-link--danger" :disabled="isSaving" @click="onRemoveImage">
@@ -587,10 +608,40 @@ async function onToggleEstado(producto: Producto, disponible: boolean) {
   color: var(--color-text);
 }
 
-.form-row input[type='file'] {
-  padding: 8px 10px;
+.file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.file-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-file {
+  flex-shrink: 0;
+  color: var(--color-cyan);
+  border-color: var(--color-cyan);
+}
+
+.btn-file:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.12);
+}
+
+.file-picker-name {
   font-size: 13px;
   color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .imagen-preview {

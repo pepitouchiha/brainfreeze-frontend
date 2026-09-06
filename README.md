@@ -1,6 +1,11 @@
 # BrainFreeze — Frontend
 
-Interfaz web de BrainFreeze, un sistema de punto de venta para una heladería/granizadería: login, catálogo de categorías/productos (con imagen), inventario, mesas (con pedidos progresivos), punto de venta (POS), historial de órdenes y dashboard de contabilidad.
+Interfaz web de BrainFreeze, un sistema de punto de venta para una heladería/granizadería: login, catálogo de categorías/productos (con imagen), mesas (con pedidos progresivos), punto de venta (POS), historial de órdenes y dashboard de contabilidad.
+
+> **Inventario deshabilitado temporalmente**: el link y la ruta `/inventario`
+> están desactivados (redirige a `/dashboard`). El flujo actual implica
+> demasiado trabajo manual para el dueño del negocio y se va a repensar antes
+> de reactivarlo — ver [`tasks/FE-039-rediseno-inventario.md`](./tasks/FE-039-rediseno-inventario.md).
 
 Construido con **Vue 3 + TypeScript + Vite + Vue Router**, consumiendo el [backend de BrainFreeze](../backend) vía una API REST. Identidad visual neón propia (logo, tipografía con degradado, acentos de color por sección) y componentes de interacción construidos a mano — modales, toasts, switch, stepper numérico — sin ninguna librería de UI de terceros.
 
@@ -24,7 +29,7 @@ src/
     common/            # BaseModal, ConfirmModal (con variante danger/primary), ToastContainer, ToggleSwitch, NumberInput, ProductoThumbnail — controles propios, sin librerías
     icons/             # iconos SVG a mano (lápiz, basurita, ojo, cancelar, billete, transferencia, chevrones) reutilizados en toda la app
     PedidoEnCursoModal.vue  # panel del pedido progresivo de una mesa abierta: agregar/quitar productos, cobrar o descartar
-  views/               # una vista por pantalla (Login, Categorias, Productos, Inventario, Mesas, Ventas/POS, Órdenes, Dashboard, Contabilidad)
+  views/               # una vista por pantalla (Login, Categorias, Productos, Mesas, Ventas/POS, Órdenes, Dashboard, Contabilidad; InventarioView.vue existe pero está deshabilitada, ver nota arriba)
   router/              # rutas + guard que redirige a /login sin token
   utils/               # formatCOP() para montos en pesos colombianos
   assets/
@@ -68,6 +73,9 @@ npm run preview   # sirve el build de producción localmente
 - **Ventas (POS)**: al confirmar una venta aparece un popup de revisión (resumen de items/total/mesa/método de pago) antes de registrarla, y un toast de éxito al confirmar — sin pantalla de ticket aparte.
 - **Mesas con pedidos progresivos**: abrir una mesa crea un pedido vacío al que se le van agregando/quitando productos mientras la gente sigue pidiendo (`PedidoEnCursoModal`), hasta cobrarlo (pide método de pago) o descartarlo. "Marcar libre" se deshabilita mientras la mesa tenga un pedido abierto sin cerrar. Mesas también se pueden renombrar o eliminar (bloqueado si tienen ventas asociadas).
 - **Órdenes**: historial de ventas ya confirmadas con filtros (fecha, mesa, estado), detalle de cada una, edición de items/mesa/método de pago, y cancelación (soft-delete, libera la mesa si aplica) — los pedidos todavía abiertos no aparecen aquí hasta cerrarse.
+- **Categorías con detalle de productos**: al hacer clic en una tarjeta de categoría (fuera de editar/eliminar) se abre un popup con los productos asociados (miniatura, nombre, precio), o un mensaje si todavía no tiene ninguno.
+- **Selector de imagen propio**: el input nativo de archivo para la imagen de un producto está oculto; se reemplaza por un botón a juego con la marca ("Elegir imagen") que muestra el nombre del archivo seleccionado.
+- **Scrollbar personalizada**: barra de scroll con los colores de la marca (morado, cian al hover) en toda la app, en vez de la barra gris por defecto del navegador.
 
 ## Proyecto
 

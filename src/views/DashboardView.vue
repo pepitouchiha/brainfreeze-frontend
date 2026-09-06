@@ -5,23 +5,13 @@ import { useVentas } from '../composables/useVentas'
 import { useMesas } from '../composables/useMesas'
 import { formatCOP } from '../utils/currency'
 
-const {
-  reporteHoy,
-  isLoadingHoy,
-  errorHoy,
-  loadHoy,
-  alertasStock,
-  isLoadingAlertas,
-  errorAlertas,
-  loadAlertasStock,
-} = useReportes()
+const { reporteHoy, isLoadingHoy, errorHoy, loadHoy } = useReportes()
 
 const { ventas, isLoading: isLoadingVentas, loadError: errorVentas, load: loadVentas } = useVentas()
 const { mesas, load: loadMesas } = useMesas()
 
 onMounted(() => {
   loadHoy()
-  loadAlertasStock()
   loadVentas()
   loadMesas()
 })
@@ -30,8 +20,6 @@ const totalHoy = computed(() => reporteHoy.value?.total ?? 0)
 const numVentasHoy = computed(() => reporteHoy.value?.num_ventas ?? 0)
 const margenHoy = computed(() => reporteHoy.value?.margen ?? 0)
 const margenHoyIncompleto = computed(() => reporteHoy.value?.margen_incompleto ?? false)
-const alertasCount = computed(() => alertasStock.value.length)
-const alertasPreview = computed(() => alertasStock.value.slice(0, 5))
 const ultimasVentas = computed(() => ventas.value.filter((v) => v.estado !== 'abierta').slice(0, 5))
 
 function mesaNombre(mesaId: number | null): string {
@@ -77,12 +65,6 @@ function mesaNombre(mesaId: number | null): string {
         <span v-else class="kpi-value kpi-value--cyan">{{ numVentasHoy }}</span>
       </div>
 
-      <div class="kpi-card kpi-card--magenta">
-        <span class="kpi-label">Insumos en alerta</span>
-        <p v-if="isLoadingAlertas" class="status">Cargando…</p>
-        <p v-else-if="errorAlertas" class="error" role="alert">{{ errorAlertas }}</p>
-        <span v-else class="kpi-value kpi-value--magenta">{{ alertasCount }}</span>
-      </div>
     </div>
 
     <div class="ventas-panel">
@@ -115,31 +97,6 @@ function mesaNombre(mesaId: number | null): string {
           </tr>
         </tbody>
       </table>
-    </div>
-
-    <div class="alertas-panel">
-      <header class="alertas-header">
-        <h2>Alertas de stock</h2>
-        <router-link class="btn-link" :to="{ name: 'inventario' }">Ver inventario</router-link>
-      </header>
-
-      <p v-if="isLoadingAlertas" class="status">Cargando alertas…</p>
-      <p v-else-if="errorAlertas" class="error" role="alert">{{ errorAlertas }}</p>
-      <p v-else-if="alertasCount === 0" class="status">No hay insumos con stock bajo o crítico.</p>
-
-      <ul v-else class="alertas-list">
-        <li v-for="insumo in alertasPreview" :key="insumo.id" class="alertas-item">
-          <span class="alertas-nombre">{{ insumo.nombre }}</span>
-          <span class="alertas-stock">{{ insumo.stock }} / mín. {{ insumo.stock_minimo }}</span>
-          <span class="tag" :class="insumo.estado === 'Bajo' ? 'tag--bajo' : 'tag--critico'">
-            {{ insumo.estado }}
-          </span>
-        </li>
-      </ul>
-
-      <p v-if="alertasCount > alertasPreview.length" class="alertas-mas">
-        + {{ alertasCount - alertasPreview.length }} más — ver todos en inventario.
-      </p>
     </div>
   </section>
 </template>
@@ -232,28 +189,6 @@ function mesaNombre(mesaId: number | null): string {
   font-size: 13px;
 }
 
-.alertas-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 20px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-soft);
-}
-
-.alertas-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.alertas-header h2 {
-  margin: 0;
-  font-size: 16px;
-  color: var(--color-text);
-}
-
 .btn-link {
   border: none;
   background: transparent;
@@ -263,60 +198,12 @@ function mesaNombre(mesaId: number | null): string {
   text-decoration: none;
 }
 
-.alertas-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.alertas-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-alt);
-  border: 1px solid var(--color-border-soft);
-}
-
-.alertas-nombre {
-  flex: 1;
-  font-size: 13.5px;
-  color: var(--color-text);
-}
-
-.alertas-stock {
-  font-size: 12.5px;
-  color: var(--color-text-muted);
-}
-
-.alertas-mas {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--color-text-muted);
-}
-
 .tag {
   font-size: 12px;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 999px;
   white-space: nowrap;
-}
-
-.tag--bajo {
-  color: var(--color-cyan);
-  background: rgba(0, 229, 255, 0.14);
-  border: 1px solid rgba(0, 229, 255, 0.4);
-}
-
-.tag--critico {
-  color: var(--color-danger);
-  background: rgba(255, 77, 109, 0.14);
-  border: 1px solid rgba(255, 77, 109, 0.4);
 }
 
 .tag--efectivo {

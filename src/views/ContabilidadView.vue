@@ -248,6 +248,10 @@ function formatHora(hora: number): string {
   color: var(--color-lime);
 }
 
+.ytd .tag {
+  margin-left: 8px;
+}
+
 .mensual-table {
   width: 100%;
   border-collapse: collapse;

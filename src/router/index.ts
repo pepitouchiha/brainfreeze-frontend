@@ -28,8 +28,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'inventario',
-        name: 'inventario',
-        component: () => import('../views/InventarioView.vue'),
+        redirect: '/dashboard',
       },
       {
         path: 'productos',
