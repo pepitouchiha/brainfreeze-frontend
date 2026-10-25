@@ -172,6 +172,11 @@ export interface VentaAgregarItems {
   items: VentaItemCreate[]
 }
 
+/** Payload de `PATCH /ventas/{id}/items/{itemId}`: nueva cantidad (> 0) de un item de un pedido abierto. */
+export interface VentaCambiarCantidadItem {
+  cantidad: number
+}
+
 /** Payload de `POST /ventas/{id}/cerrar` (BE-027): cobra y cierra un pedido abierto. */
 export interface VentaCerrar {
   metodo_pago: MetodoPago
@@ -230,4 +235,15 @@ export interface ReporteMensualOut {
   ytd_total: number
   ytd_margen: number
   ytd_margen_incompleto: boolean
+}
+
+/** Fila de `GET /reportes/diario`: totales de un día calendario local con ventas activas. */
+export interface VentaPorDia {
+  fecha: string
+  total: number
+  num_ventas: number
+  total_efectivo: number
+  total_transferencia: number
+  margen: number
+  margen_incompleto: boolean
 }

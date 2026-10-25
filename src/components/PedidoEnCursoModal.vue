@@ -11,7 +11,7 @@ import IconTrash from './icons/IconTrash.vue'
 import IconBanknote from './icons/IconBanknote.vue'
 import IconTransfer from './icons/IconTransfer.vue'
 import { formatCOP } from '../utils/currency'
-import type { MetodoPago, Producto, Venta } from '../api/types'
+import type { MetodoPago, Producto, Venta, VentaItem } from '../api/types'
 
 const props = defineProps<{
   venta: Venta
@@ -23,7 +23,7 @@ const emit = defineEmits<{
   settled: []
 }>()
 
-const { agregarItems, quitarItem, cerrarPedido, descartarPedido, messageFor } = useVentas()
+const { agregarItems, quitarItem, cambiarCantidadItem, cerrarPedido, descartarPedido, messageFor } = useVentas()
 const { productos, load: loadProductos } = useProductos()
 const { categorias, load: loadCategorias } = useCategorias()
 const { push: pushToast } = useToast()
@@ -35,8 +35,10 @@ const categoriaFiltro = ref<number | ''>('')
 const addingProductoId = ref<number | null>(null)
 const addError = ref('')
 
-const removingItemId = ref<number | null>(null)
-const removeError = ref('')
+// Item con una operación en curso (−, + o quitar): se bloquean sus botones
+// hasta que responda el backend, para no mandar cambios superpuestos.
+const busyItemId = ref<number | null>(null)
+const itemError = ref('')
 
 const metodoPagoCobro = ref<MetodoPago>('efectivo')
 const showConfirmCobro = ref(false)
@@ -93,14 +95,34 @@ async function onAgregarProducto(producto: Producto) {
 }
 
 async function onQuitarItem(itemId: number) {
-  removeError.value = ''
-  removingItemId.value = itemId
+  itemError.value = ''
+  busyItemId.value = itemId
   try {
     ventaActual.value = await quitarItem(ventaActual.value.id, itemId)
   } catch (err) {
-    removeError.value = messageFor(err, 'No fue posible quitar el producto.')
+    itemError.value = messageFor(err, 'No fue posible quitar el producto.')
   } finally {
-    removingItemId.value = null
+    busyItemId.value = null
+  }
+}
+
+/** Botones − / + de cada línea; bajar de 1 quita la línea, igual que el carrito. */
+async function onCambiarCantidad(item: VentaItem, delta: number) {
+  const nuevaCantidad = item.cantidad + delta
+  if (nuevaCantidad < 1) {
+    await onQuitarItem(item.id)
+    return
+  }
+  itemError.value = ''
+  busyItemId.value = item.id
+  try {
+    ventaActual.value = await cambiarCantidadItem(ventaActual.value.id, item.id, {
+      cantidad: nuevaCantidad,
+    })
+  } catch (err) {
+    itemError.value = messageFor(err, 'No fue posible cambiar la cantidad.')
+  } finally {
+    busyItemId.value = null
   }
 }
 
@@ -177,18 +199,39 @@ async function confirmarDescartar() {
         <ul v-else class="items-lineas">
           <li v-for="item in ventaActual.items" :key="item.id" class="item-linea">
             <div class="item-linea-info">
-              <span class="item-linea-nombre">{{ item.cantidad }} × {{ productoNombre(item.producto_id) }}</span>
+              <span class="item-linea-nombre">{{ productoNombre(item.producto_id) }}</span>
               <span class="item-linea-precio">{{ formatCOP(item.precio_unitario) }} c/u</span>
             </div>
             <div class="item-linea-controls">
+              <div class="item-linea-cantidad">
+                <button
+                  type="button"
+                  class="btn-qty"
+                  :disabled="busyItemId === item.id"
+                  aria-label="Quitar uno"
+                  @click="onCambiarCantidad(item, -1)"
+                >
+                  −
+                </button>
+                <span class="item-linea-cantidad-valor">{{ item.cantidad }}</span>
+                <button
+                  type="button"
+                  class="btn-qty"
+                  :disabled="busyItemId === item.id"
+                  aria-label="Agregar uno"
+                  @click="onCambiarCantidad(item, 1)"
+                >
+                  +
+                </button>
+              </div>
               <span class="item-linea-subtotal">
                 {{ formatCOP(item.precio_unitario * item.cantidad) }}
               </span>
               <button
                 type="button"
                 class="btn-icon btn-icon--danger"
-                :disabled="removingItemId === item.id"
-                :aria-busy="removingItemId === item.id"
+                :disabled="busyItemId === item.id"
+                :aria-busy="busyItemId === item.id"
                 aria-label="Quitar producto"
                 title="Quitar producto"
                 @click="onQuitarItem(item.id)"
@@ -198,7 +241,7 @@ async function confirmarDescartar() {
             </div>
           </li>
         </ul>
-        <p v-if="removeError" class="error error--inline" role="alert">{{ removeError }}</p>
+        <p v-if="itemError" class="error error--inline" role="alert">{{ itemError }}</p>
       </section>
 
       <section class="pedido-catalogo">
@@ -444,6 +487,37 @@ async function confirmarDescartar() {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+}
+
+.item-linea-cantidad {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.item-linea-cantidad-valor {
+  min-width: 18px;
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.btn-qty {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.btn-qty:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .item-linea-subtotal {

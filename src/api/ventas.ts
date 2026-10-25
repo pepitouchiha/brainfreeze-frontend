@@ -4,6 +4,7 @@ import type {
   Venta,
   VentaAbrir,
   VentaAgregarItems,
+  VentaCambiarCantidadItem,
   VentaCerrar,
   VentaCreate,
   VentaUpdate,
@@ -55,6 +56,15 @@ export function agregarItemsPedido(id: number, payload: VentaAgregarItems): Prom
 /** `DELETE /ventas/{id}/items/{itemId}` (BE-026): quita un item puntual de un pedido abierto. */
 export function quitarItemPedido(id: number, itemId: number): Promise<Venta> {
   return apiClient.delete<Venta>(`/ventas/${id}/items/${itemId}`)
+}
+
+/** `PATCH /ventas/{id}/items/{itemId}`: cambia la cantidad de un item de un pedido abierto (botones −/+). */
+export function cambiarCantidadItemPedido(
+  id: number,
+  itemId: number,
+  payload: VentaCambiarCantidadItem,
+): Promise<Venta> {
+  return apiClient.patch<Venta>(`/ventas/${id}/items/${itemId}`, payload)
 }
 
 /** `POST /ventas/{id}/cerrar` (BE-027): cobra y cierra un pedido abierto, libera la mesa. */

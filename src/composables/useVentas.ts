@@ -3,6 +3,7 @@ import {
   abrirPedido,
   actualizarVenta,
   agregarItemsPedido,
+  cambiarCantidadItemPedido,
   cancelarVenta,
   cerrarPedido,
   crearVenta,
@@ -17,6 +18,7 @@ import type {
   Venta,
   VentaAbrir,
   VentaAgregarItems,
+  VentaCambiarCantidadItem,
   VentaCerrar,
   VentaCreate,
   VentaUpdate,
@@ -67,6 +69,14 @@ export function useVentas() {
     return quitarItemPedido(id, itemId)
   }
 
+  function cambiarCantidadItem(
+    id: number,
+    itemId: number,
+    payload: VentaCambiarCantidadItem,
+  ): Promise<Venta> {
+    return cambiarCantidadItemPedido(id, itemId, payload)
+  }
+
   function cerrarPedidoActual(id: number, payload: VentaCerrar): Promise<Venta> {
     return cerrarPedido(id, payload)
   }
@@ -94,6 +104,7 @@ export function useVentas() {
     abrirPedido: abrirPedidoNuevo,
     agregarItems,
     quitarItem,
+    cambiarCantidadItem,
     cerrarPedido: cerrarPedidoActual,
     descartarPedido: descartarPedidoActual,
     messageFor,
