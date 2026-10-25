@@ -13,6 +13,7 @@ import IconEye from '../components/icons/IconEye.vue'
 import IconPencil from '../components/icons/IconPencil.vue'
 import IconBan from '../components/icons/IconBan.vue'
 import { formatCOP } from '../utils/currency'
+import { formatFechaHora } from '../utils/fecha'
 import type { EstadoVenta, MetodoPago, Producto, Venta, VentaUpdate } from '../api/types'
 
 const {
@@ -79,17 +80,6 @@ function productoNombre(productoId: number): string {
   return productos.value.find((p) => p.id === productoId)?.nombre ?? `Producto #${productoId}`
 }
 
-function formatFecha(iso: string): string {
-  const fecha = new Date(iso)
-  if (Number.isNaN(fecha.getTime())) return iso
-  return fecha.toLocaleString('es-CO', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
 
 function verDetalle(orden: Venta) {
   ordenSeleccionada.value = orden
@@ -277,7 +267,7 @@ async function onGuardarEdicion() {
             :class="{ 'orden-row--cancelada': orden.estado === 'cancelada' }"
           >
             <td>#{{ orden.id }}</td>
-            <td>{{ formatFecha(orden.creado_en) }}</td>
+            <td>{{ formatFechaHora(orden.creado_en) }}</td>
             <td>{{ mesaNombre(orden.mesa_id) }}</td>
             <td>
               <span class="tag" :class="`tag--${orden.metodo_pago}`">
@@ -343,7 +333,7 @@ async function onGuardarEdicion() {
       <div class="detalle">
         <h2>Orden #{{ ordenSeleccionada.id }}</h2>
         <p class="detalle-meta">
-          {{ formatFecha(ordenSeleccionada.creado_en) }} ·
+          {{ formatFechaHora(ordenSeleccionada.creado_en) }} ·
           {{ mesaNombre(ordenSeleccionada.mesa_id) }} ·
           {{ ordenSeleccionada.metodo_pago === 'efectivo' ? 'Efectivo' : 'Transferencia' }} ·
           <span
