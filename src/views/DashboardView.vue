@@ -20,7 +20,9 @@ const totalHoy = computed(() => reporteHoy.value?.total ?? 0)
 const numVentasHoy = computed(() => reporteHoy.value?.num_ventas ?? 0)
 const margenHoy = computed(() => reporteHoy.value?.margen ?? 0)
 const margenHoyIncompleto = computed(() => reporteHoy.value?.margen_incompleto ?? false)
-const ultimasVentas = computed(() => ventas.value.filter((v) => v.estado !== 'abierta').slice(0, 5))
+const ultimasVentas = computed(() =>
+  ventas.value.filter((v) => v.estado !== 'abierta' && v.estado !== 'cancelada').slice(0, 5),
+)
 
 function mesaNombre(mesaId: number | null): string {
   if (mesaId === null) return 'Venta libre'
@@ -90,9 +92,10 @@ function mesaNombre(mesaId: number | null): string {
             <td>{{ mesaNombre(venta.mesa_id) }}</td>
             <td>{{ formatCOP(venta.total) }}</td>
             <td>
-              <span class="tag" :class="`tag--${venta.metodo_pago}`">
+              <span v-if="venta.metodo_pago" class="tag" :class="`tag--${venta.metodo_pago}`">
                 {{ venta.metodo_pago === 'efectivo' ? 'Efectivo' : 'Transferencia' }}
               </span>
+              <span v-else class="tag-empty">—</span>
             </td>
           </tr>
         </tbody>
@@ -216,6 +219,10 @@ function mesaNombre(mesaId: number | null): string {
   color: var(--color-magenta);
   background: rgba(255, 0, 127, 0.14);
   border: 1px solid rgba(255, 0, 127, 0.4);
+}
+
+.tag-empty {
+  color: var(--color-text-muted);
 }
 
 .tag--parcial {
